@@ -81,6 +81,11 @@ func (s *commandSpec) argsMax() int { return len(s.roles) }
 // commands is ordered as in DESIGN §3 and drives both dispatch and help.
 var commands = []commandSpec{
 	{
+		name:    "version",
+		summary: "print the functional version and build metadata",
+		usage:   "version",
+	},
+	{
 		name:    "mount",
 		summary: "register a SQLite file under an alias",
 		usage:   "mount FILE /ALIAS [--mode ro|rw]",

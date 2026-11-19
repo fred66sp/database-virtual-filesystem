@@ -52,6 +52,7 @@ No se crean archivos por cada registro. Las rutas son identificadores virtuales.
 | FR-14 | Auditoría | Registrar operación, actor declarado, recurso, resultado e identificador de solicitud fuera de la base de usuario; no incluir valores sensibles |
 | FR-15 | `mount`, `umount`, `mounts` | Gestionar configuración local sin alterar ni eliminar los ficheros SQLite |
 | FR-16 | `export` | Exportar selección acotada con los mismos filtros y límites que `find` (`--where`), a JSON o JSONL por stdout; no escribir archivos automáticamente |
+| FR-17 | `version` | Identificar el binario: sobre JSON estándar con versión funcional, revisión Git de compilación (ldflags; `unknown` sin inyección) y estado `dev`/`release`; es subcomando, no flag global. Aprobado por el PO el 2026-11-19 (C-ACM-01, tk-30) |
 
 ## 6. Contrato de experiencia
 

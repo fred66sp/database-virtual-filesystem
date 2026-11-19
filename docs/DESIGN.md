@@ -43,9 +43,10 @@ docs/
 
 Preferir biblioteca estándar y `database/sql` cuando sea adecuado. Evaluar un driver SQLite pure Go (por ejemplo modernc.org/sqlite) frente a CGO mediante pruebas de bloqueo, transacciones, interrupción y empaquetado. No asumir que las opciones de DSN son portables. Fijar versiones tras verificar el entorno.
 
-## 3. Contrato CLI (FR-01–16)
+## 3. Contrato CLI (FR-01–17)
 
 ```text
+db-ai version
 db-ai mount FILE /ALIAS [--mode ro|rw]
 db-ai umount /ALIAS
 db-ai mounts
@@ -67,7 +68,7 @@ db-ai batch --data JSON|-
 db-ai export PATH [--where EXPR]... [--format json|jsonl] [--limit N] [--cursor TOKEN]
 ```
 
-Flags globales `--json`, `--session`, `--timeout`, `--actor`; `--dry-run` para mutaciones, incompatible con `--apply`. `describe`, `find`, `grep`, `touch` y `export` reciben una ruta VFS (`/alias/table`), no un nombre de tabla. `--apply` es obligatorio solo en `mv` y `rm`. `--json` se acepta sin efecto: JSON es el formato por defecto y único del MVP. `-` lee stdin una sola vez. JSON malformado o claves duplicadas se rechazan. `--apply` es confirmación no interactiva de las operaciones destructivas, no permiso. La raíz es `/`; sin sesión, las rutas relativas se rechazan; `ls` sin argumento lista raíz o cwd de sesión. Flags desconocidos producen error. `--help` no abre bases. La forma preferida del filtro de ejemplo del PRD es `--where 'status=pending'`; los espacios exteriores del valor no son significativos.
+Flags globales `--json`, `--session`, `--timeout`, `--actor`; `--dry-run` para mutaciones, incompatible con `--apply`. `describe`, `find`, `grep`, `touch` y `export` reciben una ruta VFS (`/alias/table`), no un nombre de tabla. `--apply` es obligatorio solo en `mv` y `rm`. `--json` se acepta sin efecto: JSON es el formato por defecto y único del MVP. `-` lee stdin una sola vez. JSON malformado o claves duplicadas se rechazan. `--apply` es confirmación no interactiva de las operaciones destructivas, no permiso. La raíz es `/`; sin sesión, las rutas relativas se rechazan; `ls` sin argumento lista raíz o cwd de sesión. Flags desconocidos producen error. `--help` no abre bases. La forma preferida del filtro de ejemplo del PRD es `--where 'status=pending'`; los espacios exteriores del valor no son significativos. `version` es un subcomando, no un flag global: no abre bases y emite en `data` `{version, commit, state}` —versión funcional, revisión Git inyectada al compilar con `-ldflags -X` (`unknown` si no se inyectó) y estado de build `dev` o `release`.
 
 ## 4. Identidad y rutas (FR-02–04, NFR-02,07)
 
