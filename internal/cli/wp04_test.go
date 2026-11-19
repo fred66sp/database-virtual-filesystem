@@ -62,6 +62,7 @@ type auditJSON struct {
 	Alias     string `json:"alias"`
 	Table     string `json:"table"`
 	Resource  string `json:"resource"`
+	Dest      string `json:"dest"`
 	Status    string `json:"status"`
 	Code      string `json:"code"`
 }
