@@ -96,6 +96,8 @@ func CodedError(err error) *Error {
 		return &Error{Code: CodeCommitUnknown, Message: err.Error(), Err: err}
 	case errors.Is(err, storage.ErrUnsupported):
 		return &Error{Code: CodeUnsupported, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrLimit):
+		return &Error{Code: CodeLimit, Message: err.Error(), Err: err}
 	case errors.Is(err, context.DeadlineExceeded):
 		return &Error{Code: CodeTimeout, Message: "operation timed out", Err: err}
 	case errors.Is(err, context.Canceled):

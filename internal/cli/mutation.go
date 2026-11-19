@@ -8,8 +8,7 @@ import (
 	"dbvfs/internal/app"
 )
 
-// executeMutation dispatches touch, write, cp, mv and rm. batch stays for
-// WP-06.
+// executeMutation dispatches touch, write, cp, mv, rm and batch.
 func executeMutation(inv *invocation, stdin io.Reader) (result, error) {
 	// D-7: only mv and rm need --apply. Without it they may still plan with
 	// --dry-run; otherwise the invocation is incomplete, not executed.
@@ -56,18 +55,29 @@ func executeMutation(inv *invocation, stdin io.Reader) (result, error) {
 	case "rm":
 		data, err := svc.Remove(ctx, *inv.path, inv.ifMatch, opts)
 		return result{data: data}, err
+	case "batch":
+		data, err := svc.Batch(ctx, payload, opts)
+		return result{data: data}, err
 	}
 	return result{}, unreachableError(inv.spec.name)
 }
+
+// maxStdinPayload caps --data read from stdin. D-8 allows 100 operations and a
+// typical batch is far below 1 MiB; 4 MiB leaves headroom without letting a
+// runaway pipe exhaust memory before the D-8 check runs.
+const maxStdinPayload = 4 << 20
 
 // dataPayload reads the JSON once from stdin when the flag is "-" (DESIGN §3).
 func dataPayload(inv *invocation, stdin io.Reader) ([]byte, error) {
 	if inv.data != "-" {
 		return []byte(inv.data), nil
 	}
-	data, err := io.ReadAll(stdin)
+	data, err := io.ReadAll(io.LimitReader(stdin, maxStdinPayload+1))
 	if err != nil {
 		return nil, fmt.Errorf("read --data from stdin: %w", err)
+	}
+	if len(data) > maxStdinPayload {
+		return nil, codedError(CodeLimit, "--data from stdin exceeds %d bytes", maxStdinPayload)
 	}
 	return data, nil
 }

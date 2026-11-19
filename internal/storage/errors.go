@@ -21,6 +21,8 @@ var (
 	ErrConstraint = errors.New("constraint")
 	// ErrBusy marks lock contention that outlived the busy timeout.
 	ErrBusy = errors.New("busy")
+	// ErrLimit marks an input that exceeds a documented budget.
+	ErrLimit = errors.New("limit exceeded")
 	// ErrCommitUnknown marks a write whose commit outcome could not be
 	// confirmed; the caller must reconcile by reading the database back.
 	ErrCommitUnknown = errors.New("commit outcome unknown")
