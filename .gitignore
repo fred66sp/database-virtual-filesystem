@@ -55,3 +55,7 @@ dist/
 *.key
 .env
 .env.*
+
+# Python: bytecode compilado (herramientas de examples/)
+__pycache__/
+*.pyc

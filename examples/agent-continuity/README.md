@@ -14,8 +14,9 @@ determinista y una skill de comportamiento. Los requisitos están en
 ## Requisitos
 
 - `db-ai` en `PATH`, con el contrato de db-ai v0.2.0.
-- `sqlite3` para aplicar el esquema y el seed.
+- `sqlite3` para aplicar el esquema (y el fixture solo con `--demo`).
 - `python3` para mezclar la entrada del montaje en la configuración de db-ai.
+- `flock` (util-linux) para compartir con db-ai el lock de `config.json`.
 - Un proyecto anfitrión que excluya `.agent-memory/` de Git. Este repositorio lo
   hace en su `.gitignore` raíz.
 
@@ -24,17 +25,32 @@ determinista y una skill de comportamiento. Los requisitos están en
 Desde esta carpeta:
 
 ```bash
-bash init.sh
+bash init.sh          # memoria limpia: esquema y metadatos reales del proyecto
+bash init.sh --demo   # añade los datos ficticios de seed.sql
 ```
 
 `init.sh` es idempotente y se puede ejecutar desde cualquier directorio:
 
-1. Crea `.agent-memory/` y `memory.db` si faltan.
-2. Aplica [schema.sql](schema.sql) solo si la base no existe o le faltan tablas.
-3. Aplica [seed.sql](seed.sql) solo si la base no tiene datos.
-4. Genera el `project_key` de la base y registra el montaje `mem` en
-   `$XDG_CONFIG_HOME/db-ai/config.json` (o `~/.config/db-ai/config.json`).
-5. Verifica con `db-ai mounts`, `db-ai ls /mem` y un `db-ai cat` de `meta`.
+1. Toma el mismo `flock` exclusivo que db-ai sobre
+   `$XDG_CONFIG_HOME/db-ai/config.lock`.
+2. Crea `.agent-memory/` y `memory.db` si faltan.
+3. Aplica [schema.sql](schema.sql) y las filas de `meta` del proyecto
+   (`schema_version`, `project_key` UUIDv7, `project_name` derivado de la carpeta
+   y `created_at` UTC) en una sola transacción con `-bail`. Si algo falla, la
+   transacción se revierte y no se publica una base a medias.
+4. Con `--demo`, aplica además [seed.sql](seed.sql) (sesiones, observaciones,
+   checkpoints y preferencias ficticios) en la misma transacción, solo en una
+   base nueva.
+5. Registra el montaje `mem` en `$XDG_CONFIG_HOME/db-ai/config.json` (o
+   `~/.config/db-ai/config.json`) bajo el lock, conservando los demás alias,
+   políticas y `cursor_key`.
+6. Verifica con `db-ai mounts`, `db-ai ls /mem` y un `db-ai cat` de `meta`.
+
+Sin `--demo`, un proyecto nuevo no contiene sesiones, observaciones,
+preferencias ni checkpoints ficticios. Sobre una base existente, `init.sh` no
+re-aplica el DDL ni toca los recuerdos: solo asegura el montaje. Una base
+parcial (menos de 5 tablas) se rechaza con error claro en vez de completarla a
+ciegas; elimínala o recupérala antes de reintentar.
 
 Variables de entorno:
 
@@ -45,15 +61,16 @@ Variables de entorno:
 | `XDG_CONFIG_HOME` | Ubicación de la configuración de db-ai | `~/.config` |
 
 El alias es único por configuración de usuario: si `mem` ya apunta a otra base,
-`init.sh` se detiene en lugar de pisarla. Usa `ACM_ALIAS` para convivir con otro
-proyecto.
+`init.sh` se detiene en lugar de pisarla; no hay flag de sobrescritura. Usa
+`ACM_ALIAS` para convivir con otro proyecto.
 
 ### Por qué el montaje no lo hace `db-ai mount`
 
 `db-ai mount --mode rw` exige una política de escritura explícita y la CLI no
 tiene un flag para escribirla: devuelve `E_DENIED`. La política es territorio
 del operador y vive en `config.json`. Por eso `init.sh` registra el alias y su
-política con una mezcla atómica del fichero, conservando otros alias.
+política con una mezcla atómica del fichero, bajo el `flock` de
+`config.lock` que db-ai usa en `internal/state`, conservando otros alias.
 
 [config.example.json](config.example.json) reproduce esa entrada con la política
 de DESIGN §6: lectura en `/mem` y `touch`/`write` en `sessions`, `observations`,
@@ -87,10 +104,17 @@ Runbooks ejecutables, no prosa:
 - [scenarios/scenario-integrity.md](scenarios/scenario-integrity.md): aislamiento
   entre proyectos, conflicto de ETag, deduplicación exacta y `E_DENIED` en
   prefijos sin escritura.
+- [scenarios/evidence/evidence-benchmark.md](scenarios/evidence/evidence-benchmark.md):
+  benchmark de M-ACM-01 a M-ACM-04 sobre el fixture determinista de 10 000
+  observaciones, con el guion acotado y su veredicto por variante.
+- [scenarios/scenario-agents.md](scenarios/scenario-agents.md): dos agentes LLM
+  reales en sesiones separadas; M-ACM-05 con las cinco preguntas de reanudación
+  y evaluación contra la base. Su evidencia está en
+  [scenarios/evidence/evidence-agents.md](scenarios/evidence/evidence-agents.md).
 
-Trabajan sobre bases temporales cuando la prueba modifica datos, salvo el flujo
-de continuidad, que usa la base del ejemplo y se repite borrando
-`.agent-memory/` y volviendo a ejecutar `init.sh`.
+Trabajan sobre bases temporales cuando la prueba modifica datos; el escenario de
+agentes usa una base aislada y el flujo de continuidad usa la base del ejemplo,
+que se repite borrando `.agent-memory/` y volviendo a ejecutar `init.sh --demo`.
 
 ## Tests
 
@@ -103,10 +127,10 @@ algoritmo de DESIGN §5.2 (NFC, array JSON canónico, SHA-256): úsalo en vez de
 reimplementarlo, porque la deduplicación exacta depende de que todos los
 productores calculen igual.
 
-Ejercen sobre una base temporal y una configuración temporal de db-ai: init,
-lectura, seed, escritura con ETag, conflicto, deduplicación, política y segundo
-init. Cada caso imprime `ok` o `FALLO`; el código de salida es 0 solo si todos
-pasan.
+Ejercen sobre una base temporal y una configuración temporal de db-ai: init
+limpio, `--demo`, idempotencia, lectura, escritura con ETag, conflicto,
+deduplicación, política y concurrencia de init con db-ai sobre `config.json`.
+Cada caso imprime `ok` o `FALLO`; el código de salida es 0 solo si todos pasan.
 
 ## Garantías y convenciones
 
@@ -121,8 +145,13 @@ pasan.
 
 Las convenciones de comportamiento —qué capturar, cómo consolidar, cuándo
 revisar y cómo reconciliar— son responsabilidad de la skill
-`agent-continuity` (ACM-04). Mientras no exista, los scenarios muestran el flujo
-mínimo que un agente debe seguir.
+`agent-continuity` ([skill/](skill/)); los scenarios muestran el flujo mínimo
+que un agente debe seguir. Las mediciones y la práctica con agentes reales están
+en [scenarios/evidence/](scenarios/evidence/):
+[evidence-benchmark.md](scenarios/evidence/evidence-benchmark.md) mide M-ACM-01 a
+M-ACM-04 sobre un fixture de 10 000 observaciones y
+[evidence-agents.md](scenarios/evidence/evidence-agents.md) recoge M-ACM-05 con
+dos agentes.
 
 ## Límites conocidos
 

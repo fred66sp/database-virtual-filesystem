@@ -43,12 +43,45 @@ counts() {
                         (SELECT count(*) FROM preferences);"
 }
 
-# --- Caso 1: init sobre base nueva -----------------------------------------
+# --- Caso 1: init sobre base nueva (memoria limpia, sin --demo) -------------
 out=$(bash "$init" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ -f "$db" ]; then
   ok "init crea la base y sale 0"
 else
   ko "init crea la base y sale 0" "rc=$rc salida: $out"
+fi
+
+inicial=$(counts)
+meta_rows=$(sqlite3 "$db" "SELECT count(*) FROM meta;")
+pname=$(sqlite3 "$db" "SELECT value FROM meta WHERE name='project_name';")
+pkey=$(sqlite3 "$db" "SELECT value FROM meta WHERE name='project_key';")
+created=$(sqlite3 "$db" "SELECT value FROM meta WHERE name='created_at';")
+if [ "$inicial" = "4/0/0/0/0" ] && [ "$meta_rows" = "4" ] \
+  && [ "$pname" = "proyecto" ] \
+  && printf '%s' "$pkey" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' \
+  && printf '%s' "$created" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+  ok "init por defecto: 0 filas de contenido y 4 meta reales ($inicial, $pkey)"
+else
+  ko "init por defecto: memoria limpia y meta reales" "filas=$inicial meta=$meta_rows nombre=$pname clave=$pkey creada=$created"
+fi
+
+out=$(bash "$init" 2>&1); rc=$?
+repetido=$(counts)
+pkey2=$(sqlite3 "$db" "SELECT value FROM meta WHERE name='project_key';")
+if [ "$rc" -eq 0 ] && [ "$repetido" = "$inicial" ] && [ "$pkey2" = "$pkey" ]; then
+  ok "dos init limpios seguidos dejan el mismo estado ($repetido)"
+else
+  ko "dos init limpios seguidos dejan el mismo estado" "rc=$rc antes=$inicial despues=$repetido clave_antes=$pkey clave_despues=$pkey2 salida: $out"
+fi
+
+# --- Caso 1b: --demo incorpora el fixture ----------------------------------
+rm -rf "$ACM_HOME/.agent-memory"
+out=$(bash "$init" --demo 2>&1); rc=$?
+con_demo=$(counts)
+if [ "$rc" -eq 0 ] && [ "$con_demo" = "4/2/6/1/3" ]; then
+  ok "--demo aplica el fixture completo ($con_demo)"
+else
+  ko "--demo aplica el fixture completo" "rc=$rc filas=$con_demo salida: $out"
 fi
 
 # --- Caso 2: lectura con db-ai ---------------------------------------------
@@ -192,6 +225,197 @@ if [ "$calc" = "OK" ]; then
   ok "tools/content-hash.py reproduce el content_hash del seed (DESIGN §5.2)"
 else
   ko "tools/content-hash.py reproduce el content_hash del seed" "$calc"
+fi
+
+# --- Casos 10-12: concurrencia sobre config.json ---------------------------
+# (a) dos init.sh del mismo proyecto, (b) init.sh junto a db-ai mount de otro
+# alias, (c) proyectos independientes. Criterio: 0 montajes perdidos, JSON
+# siempre parseable y política/cursor_key intactos.
+
+otro_db="$tmp/otro.db"
+sqlite3 "$otro_db" 'CREATE TABLE t (x TEXT);'
+db-ai mount "$otro_db" /otro --mode ro >/dev/null 2>&1 \
+  || ko "preparación de concurrencia: db-ai mount /otro" "no se pudo montar $otro_db"
+cursor=$(python3 - <<'PY'
+import base64, os
+print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))
+PY
+)
+python3 - "$XDG_CONFIG_HOME/db-ai/config.json" "$cursor" <<'PY'
+import json, sys
+path, cursor = sys.argv[1:3]
+with open(path, encoding="utf-8") as fh:
+    cfg = json.load(fh)
+cfg["cursor_key"] = cursor
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(cfg, fh, ensure_ascii=False, indent=2)
+    fh.write("\n")
+PY
+
+# Comprueba JSON válido, alias correcto con su política, montaje ajeno y cursor.
+config_ok() {
+  python3 - "$XDG_CONFIG_HOME/db-ai/config.json" "$1" "$2" "$3" <<'PY'
+import json, os, sys
+path, alias, db, cursor = sys.argv[1:5]
+try:
+    with open(path, encoding="utf-8") as fh:
+        cfg = json.load(fh)
+except Exception as exc:
+    print(f"json ilegible: {exc}")
+    sys.exit(1)
+mounts = cfg.get("mounts", {})
+m = mounts.get(alias)
+if not m or os.path.realpath(m.get("file", "")) != os.path.realpath(db):
+    print(f"alias {alias} ausente o mal apuntado: {m}")
+    sys.exit(1)
+if m.get("mode") != "rw" or len(m.get("allow", [])) != 5:
+    print(f"política inesperada en {alias}: {m}")
+    sys.exit(1)
+if "otro" not in mounts:
+    print("montaje ajeno 'otro' perdido")
+    sys.exit(1)
+if cfg.get("cursor_key") != cursor:
+    print("cursor_key perdido")
+    sys.exit(1)
+PY
+}
+
+conc_home="$tmp/concurrente"
+conc_db="$conc_home/.agent-memory/memory.db"
+fallos_init=0
+perdidas=0
+invalidos=0
+for i in $(seq 1 10); do
+  ACM_HOME="$conc_home" ACM_ALIAS=conc bash "$init" >/dev/null 2>&1 &
+  p1=$!
+  ACM_HOME="$conc_home" ACM_ALIAS=conc bash "$init" >/dev/null 2>&1 &
+  p2=$!
+  wait "$p1" || fallos_init=$((fallos_init + 1))
+  wait "$p2" || fallos_init=$((fallos_init + 1))
+  python3 -m json.tool "$XDG_CONFIG_HOME/db-ai/config.json" >/dev/null 2>&1 \
+    || invalidos=$((invalidos + 1))
+  config_ok conc "$conc_db" "$cursor" >/dev/null || perdidas=$((perdidas + 1))
+done
+if [ "$fallos_init" -eq 0 ] && [ "$perdidas" -eq 0 ] && [ "$invalidos" -eq 0 ] \
+  && [ -f "$conc_db" ]; then
+  ok "concurrencia (a): 10 iteraciones de dos init en paralelo sin pérdidas"
+else
+  ko "concurrencia (a): dos init en paralelo" "fallos=$fallos_init perdidas=$perdidas json_invalidos=$invalidos db=$([ -f "$conc_db" ] && echo sí || echo no)"
+fi
+
+# (b) init.sh concurrente con db-ai mount de otro alias.
+fallos_b=0
+for i in $(seq 1 5); do
+  nuevo_db="$tmp/nuevo-$i.db"
+  sqlite3 "$nuevo_db" 'CREATE TABLE t (x TEXT);'
+  ACM_HOME="$tmp/proyecto-b" ACM_ALIAS=init-b bash "$init" >/dev/null 2>&1 &
+  pb=$!
+  db-ai mount "$nuevo_db" "/externo$i" --mode ro >/dev/null 2>&1 &
+  pm=$!
+  wait "$pb" || fallos_b=$((fallos_b + 1))
+  wait "$pm" || fallos_b=$((fallos_b + 1))
+  python3 -m json.tool "$XDG_CONFIG_HOME/db-ai/config.json" >/dev/null 2>&1 \
+    || fallos_b=$((fallos_b + 1))
+  db-ai mounts 2>/dev/null | grep -Fq "\"alias\":\"externo$i\"" \
+    || fallos_b=$((fallos_b + 1))
+done
+if [ "$fallos_b" -eq 0 ] \
+  && config_ok init-b "$tmp/proyecto-b/.agent-memory/memory.db" "$cursor" >/dev/null; then
+  ok "concurrencia (b): init.sh y db-ai mount no se pisan"
+else
+  ko "concurrencia (b): init.sh y db-ai mount no se pisan" "fallos=$fallos_b"
+fi
+
+# (c) proyectos independientes en paralelo.
+ACM_HOME="$tmp/proyecto-c1" ACM_ALIAS=conc-c1 bash "$init" >/dev/null 2>&1 &
+pc1=$!
+ACM_HOME="$tmp/proyecto-c2" ACM_ALIAS=conc-c2 bash "$init" >/dev/null 2>&1 &
+pc2=$!
+wait "$pc1"; rc1=$?
+wait "$pc2"; rc2=$?
+if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] \
+  && config_ok conc-c1 "$tmp/proyecto-c1/.agent-memory/memory.db" "$cursor" >/dev/null \
+  && config_ok conc-c2 "$tmp/proyecto-c2/.agent-memory/memory.db" "$cursor" >/dev/null; then
+  ok "concurrencia (c): dos proyectos independientes conservan ambos montajes"
+else
+  ko "concurrencia (c): dos proyectos independientes" "rc1=$rc1 rc2=$rc2"
+fi
+
+# --- Caso 13: reanudación con más de una página de checkpoints activos ------
+# Fixture: 12 sesiones y 12 checkpoints activos además del seed. `find` ordena
+# por PK ascendente, así que con límite 5 el vigente (UUIDv7 mayor) no cabe en
+# la primera página. El protocolo 1.4 corregido lo localiza por la ventana de
+# sesiones con 2 `find` acotados, sin exportar la tabla ni recorrer páginas.
+mapfile -t fixture < <(python3 - "$db" <<'PY'
+import datetime, hashlib, json, sqlite3, sys
+
+con = sqlite3.connect(sys.argv[1])
+now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+for i in range(1, 13):
+    sid = f"01a2b000-0000-7000-8000-{i:012d}"
+    cid = f"01a2c000-0000-7000-8000-{i:012d}"
+    ts = (now - datetime.timedelta(minutes=12 - i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute(
+        "INSERT INTO sessions (id, agent_id, source, goal, status, started_at,"
+        " created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+        (sid, f"agente-{i}", "agent", f"sesión {i}", "closed", ts, ts, ts),
+    )
+    campos = [f"objetivo {i}", f"estado {i}", f"paso {i}", "[]", "[]"]
+    h = "sha256:" + hashlib.sha256(
+        json.dumps(campos, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+    con.execute(
+        "INSERT INTO checkpoints (id, session_id, agent_id, source, goal, state,"
+        " next_steps, files, open_questions, status, content_hash, created_at,"
+        " updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (cid, sid, f"agente-{i}", "agent", *campos, "active", h, ts, ts),
+    )
+con.commit()
+print(f"01a2b000-0000-7000-8000-{12:012d}")
+print(f"01a2c000-0000-7000-8000-{12:012d}")
+PY
+)
+
+# Extrae los id de las filas de una respuesta de find, en el orden devuelto.
+ids() {
+  python3 -c 'import json, sys
+try:
+    print("\n".join(r["fields"]["id"]["data"] for r in json.load(sys.stdin)["data"]["rows"]))
+except Exception:
+    pass'
+}
+
+corte=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+sesiones=$(db-ai find "$alias/sessions" --where "started_at>=$corte" --limit 50 2>&1)
+elegida=$(printf '%s' "$sesiones" | ids | sort | tail -n 1)
+checkpoints=$(db-ai find "$alias/checkpoints" --where "session_id=$elegida" --where 'status=active' --limit 5 2>&1)
+vigente=$(printf '%s' "$checkpoints" | ids | sort | tail -n 1)
+# Protocolo antiguo: `find` de checkpoints activos sin filtro de sesión. El
+# vigente no está en esa página y el máximo de la página no es el vigente.
+pagina=$(db-ai find "$alias/checkpoints" --where 'status=active' --limit 5 2>&1)
+antiguo=$(printf '%s' "$pagina" | ids | sort | tail -n 1)
+pagina_filas=$(printf '%s' "$pagina" | ids | grep -c . || true)
+# meta.truncated distingue "la ventana entera está en la página" de "falta la
+# parte reciente": el protocolo corrige la ventana; el antiguo no puede.
+truncado() {
+  python3 -c 'import json, sys
+try:
+    print(json.load(sys.stdin)["meta"]["truncated"])
+except Exception:
+    print("error")'
+}
+sesiones_truncada=$(printf '%s' "$sesiones" | truncado)
+pagina_truncada=$(printf '%s' "$pagina" | truncado)
+activos=$(sqlite3 "$db" "SELECT count(*) FROM checkpoints WHERE status='active';")
+
+if [ "$vigente" = "${fixture[1]:-}" ] && [ "$elegida" = "${fixture[0]:-}" ] \
+  && [ "$activos" -gt 5 ] && [ "$pagina_filas" -eq 5 ] \
+  && [ "$sesiones_truncada" = "False" ] && [ "$pagina_truncada" = "True" ] \
+  && [ "$antiguo" != "${fixture[1]:-}" ]; then
+  ok "checkpoint vigente entre $activos activos con límite 5 (2 find acotados)"
+else
+  ko "checkpoint vigente entre $activos activos con límite 5" \
+    "sesión=$elegida vigente=$vigente esperado_sesión=${fixture[0]:-} esperado_checkpoint=${fixture[1]:-} página=$pagina_filas truncada_sesiones=$sesiones_truncada truncada_página=$pagina_truncada antiguo=$antiguo activos=$activos"
 fi
 
 # --- Resultado -------------------------------------------------------------
