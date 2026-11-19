@@ -50,3 +50,8 @@ go build ./cmd/db-ai
 go test ./...
 go test -race ./...
 ```
+
+El binario no se versiona en el repositorio: se construye desde el código
+(`go build -o db-ai ./cmd/db-ai`) y se instala en tu PATH local (p. ej.
+`~/.local/bin`). En cada release semver se publica como asset adjunto a la
+release de GitHub, nunca dentro del árbol del repo.

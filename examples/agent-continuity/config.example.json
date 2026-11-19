@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "mounts": {
+    "mem": {
+      "file": "<RUTA ABSOLUTA DEL PROYECTO>/.agent-memory/memory.db",
+      "mode": "rw",
+      "allow": [
+        {
+          "ops": ["ls", "tree", "cat", "describe", "stat", "find", "grep", "export"],
+          "prefix": "/mem"
+        },
+        { "ops": ["touch", "write"], "prefix": "/mem/sessions" },
+        { "ops": ["touch", "write"], "prefix": "/mem/observations" },
+        { "ops": ["touch", "write"], "prefix": "/mem/checkpoints" },
+        { "ops": ["touch", "write"], "prefix": "/mem/preferences" }
+      ]
+    }
+  }
+}

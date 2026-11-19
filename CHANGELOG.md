@@ -5,7 +5,7 @@ Todos los cambios notables de este proyecto se documentan en este fichero.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Sin publicar]
+## [0.2.0] - 2026-11-19
 
 ### Añadido
 
@@ -27,6 +27,14 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 - Comando `batch` (FR-12): array de operaciones `{op, path, …}` con máximo de 100 (D-8),
   un solo montaje y una transacción con rollback completo, auditoría por operación y
   `--dry-run`; pruebas de concurrencia multiproceso (WP-06).
+- Aplicación de referencia `examples/agent-continuity/`: memoria de continuidad para
+  agentes compuesta con SQLite + db-ai + una skill — contratos PRD/DESIGN propios
+  (17 requisitos trazados), esquema con PKs UUIDv7, `init.sh` idempotente, escenarios
+  ejecutables (continuidad A→B e integridad), batería de 13 pruebas y evidencias de
+  validación con métricas de recuperación.
+- Skill `agent-continuity` (paquete en `examples/agent-continuity/skill/`): siete
+  protocolos de comportamiento sobre la skill `db-ai`, con la memoria declarada como
+  contexto y nunca como instrucciones con autoridad sobre el usuario.
 
 ### Modificado
 
