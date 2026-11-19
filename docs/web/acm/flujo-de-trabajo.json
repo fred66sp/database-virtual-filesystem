@@ -1,0 +1,425 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Ciclo de continuidad de ACM",
+    "subtitle": "Abrir sesión con contexto acotado, trabajar, capturar conocimiento durable, consolidar con ETag, cerrar con checkpoint y reanudar sin la conversación.",
+    "locale": "es",
+    "output": "docs/web/acm/flujo-de-trabajo.html",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "agente",
+      "label": "Proyecto y persona"
+    },
+    {
+      "id": "operacion",
+      "label": "Skill agent-continuity"
+    },
+    {
+      "id": "memoria",
+      "label": "Memoria del proyecto"
+    },
+    {
+      "id": "guardas",
+      "label": "Guardas y errores",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "iniciar",
+      "label": "Iniciar",
+      "fromCol": 0,
+      "toCol": 0,
+      "variant": "emphasis"
+    },
+    {
+      "id": "trabajar",
+      "label": "Trabajar",
+      "fromCol": 1,
+      "toCol": 1
+    },
+    {
+      "id": "capturar",
+      "label": "Capturar",
+      "fromCol": 2,
+      "toCol": 2,
+      "variant": "security"
+    },
+    {
+      "id": "consolidar",
+      "label": "Consolidar",
+      "fromCol": 3,
+      "toCol": 3,
+      "variant": "security"
+    },
+    {
+      "id": "cerrar",
+      "label": "Cerrar",
+      "fromCol": 4,
+      "toCol": 4
+    },
+    {
+      "id": "reanudar",
+      "label": "Reanudar",
+      "fromCol": 5,
+      "toCol": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "captura-segura",
+      "label": "Hash, ETag y lote",
+      "lane": "operacion",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "encargo",
+    "iniciar",
+    "trabajar",
+    "capturar",
+    "consolidar",
+    "cerrar",
+    "reanudar",
+    "resultado"
+  ],
+  "nodes": [
+    {
+      "id": "encargo",
+      "lane": "agente",
+      "col": 0,
+      "type": "external",
+      "label": "Encargo",
+      "sublabel": "trabajo del proyecto",
+      "tag": "persona y agente",
+      "icon": "start",
+      "width": 118
+    },
+    {
+      "id": "iniciar",
+      "lane": "operacion",
+      "col": 0,
+      "type": "backend",
+      "label": "1 · Iniciar",
+      "sublabel": "mounts · meta · sesión",
+      "tag": "project_key",
+      "width": 118
+    },
+    {
+      "id": "contexto",
+      "lane": "memoria",
+      "col": 1,
+      "type": "database",
+      "label": "Checkpoint",
+      "sublabel": "preferencias · find",
+      "tag": "pocas invocaciones",
+      "width": 118
+    },
+    {
+      "id": "trabajar",
+      "lane": "operacion",
+      "col": 1,
+      "type": "backend",
+      "label": "2 · Trabajar",
+      "sublabel": "proyecto y decisiones",
+      "tag": "sin repetir hallazgos",
+      "width": 118
+    },
+    {
+      "id": "capturar",
+      "lane": "operacion",
+      "col": 2,
+      "type": "security",
+      "label": "3 · Capturar",
+      "sublabel": "touch + content_hash",
+      "tag": "solo lo durable",
+      "width": 118
+    },
+    {
+      "id": "guardar",
+      "lane": "memoria",
+      "col": 2,
+      "type": "database",
+      "label": "Observación",
+      "sublabel": "UNIQUE(content_hash)",
+      "tag": "procedencia",
+      "width": 118
+    },
+    {
+      "id": "consolidar",
+      "lane": "operacion",
+      "col": 3,
+      "type": "security",
+      "label": "4 · Consolidar",
+      "sublabel": "batch con ETag",
+      "tag": "una activa",
+      "width": 118
+    },
+    {
+      "id": "sustituir",
+      "lane": "memoria",
+      "col": 3,
+      "type": "database",
+      "label": "Decisión previa",
+      "sublabel": "superseded_by",
+      "tag": "historial conservado",
+      "width": 118
+    },
+    {
+      "id": "cerrar",
+      "lane": "operacion",
+      "col": 4,
+      "type": "backend",
+      "label": "5 · Cerrar",
+      "sublabel": "checkpoint y resumen",
+      "tag": "siguiente paso",
+      "width": 118
+    },
+    {
+      "id": "checkpoint",
+      "lane": "memoria",
+      "col": 4,
+      "type": "database",
+      "label": "Checkpoint activo",
+      "sublabel": "next_steps · files",
+      "tag": "uno por sesión",
+      "width": 118
+    },
+    {
+      "id": "reanudar",
+      "lane": "operacion",
+      "col": 5,
+      "type": "backend",
+      "label": "6 · Reanudar",
+      "sublabel": "checkpoint · decisiones",
+      "tag": "otra sesión",
+      "width": 118
+    },
+    {
+      "id": "resultado",
+      "lane": "memoria",
+      "col": 5,
+      "type": "database",
+      "label": "Continuidad",
+      "sublabel": "contexto recuperado",
+      "icon": "success",
+      "width": 118
+    },
+    {
+      "id": "denegado",
+      "lane": "guardas",
+      "col": 1,
+      "type": "security",
+      "label": "E_DENIED",
+      "sublabel": "sin política rw",
+      "tag": "no se escala",
+      "icon": "stop",
+      "width": 118
+    },
+    {
+      "id": "ajena",
+      "lane": "guardas",
+      "col": 2,
+      "type": "security",
+      "label": "project_key ajeno",
+      "sublabel": "base de otro proyecto",
+      "tag": "detente",
+      "icon": "stop",
+      "width": 118
+    },
+    {
+      "id": "duplicado",
+      "lane": "guardas",
+      "col": 3,
+      "type": "security",
+      "label": "E_CONSTRAINT",
+      "sublabel": "hash repetido",
+      "tag": "no reintentar",
+      "icon": "stop",
+      "width": 118
+    },
+    {
+      "id": "conflicto",
+      "lane": "guardas",
+      "col": 4,
+      "type": "security",
+      "label": "E_CONFLICT",
+      "sublabel": "ETag viejo",
+      "tag": "releer",
+      "icon": "stop",
+      "width": 118
+    },
+    {
+      "id": "incierto",
+      "lane": "guardas",
+      "col": 5,
+      "type": "security",
+      "label": "E_COMMIT_UNKNOWN",
+      "sublabel": "commit incierto",
+      "tag": "leer antes",
+      "icon": "stop",
+      "width": 118
+    }
+  ],
+  "edges": [
+    {
+      "id": "pide",
+      "from": "encargo",
+      "to": "iniciar",
+      "label": "abre sesión",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "avanza",
+      "from": "iniciar",
+      "to": "trabajar",
+      "label": "contexto listo",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "aporta-contexto",
+      "from": "contexto",
+      "to": "trabajar",
+      "label": "contexto",
+      "variant": "dashed"
+    },
+    {
+      "id": "deniega",
+      "from": "iniciar",
+      "to": "denegado",
+      "label": "sin permiso",
+      "variant": "security",
+      "role": "return"
+    },
+    {
+      "id": "otra-base",
+      "from": "trabajar",
+      "to": "ajena",
+      "label": "clave distinta",
+      "variant": "security",
+      "role": "return"
+    },
+    {
+      "id": "captura",
+      "from": "trabajar",
+      "to": "capturar",
+      "label": "hallazgo durable",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "inserta",
+      "from": "capturar",
+      "to": "guardar",
+      "label": "touch",
+      "variant": "emphasis"
+    },
+    {
+      "id": "repite",
+      "from": "capturar",
+      "to": "duplicado",
+      "label": "mismo hash",
+      "variant": "security",
+      "role": "return"
+    },
+    {
+      "id": "consolida",
+      "from": "capturar",
+      "to": "consolidar",
+      "label": "cambio de decisión",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "sustituye",
+      "from": "consolidar",
+      "to": "sustituir",
+      "label": "una operación",
+      "variant": "emphasis"
+    },
+    {
+      "id": "choca",
+      "from": "consolidar",
+      "to": "conflicto",
+      "label": "ETag viejo",
+      "variant": "security",
+      "role": "return"
+    },
+    {
+      "id": "cierra",
+      "from": "consolidar",
+      "to": "cerrar",
+      "label": "sesión termina",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "deja",
+      "from": "cerrar",
+      "to": "checkpoint",
+      "label": "deja",
+      "variant": "emphasis"
+    },
+    {
+      "id": "commit-incierto",
+      "from": "cerrar",
+      "to": "incierto",
+      "label": "commit incierto",
+      "variant": "security",
+      "role": "return"
+    },
+    {
+      "id": "reanuda",
+      "from": "cerrar",
+      "to": "reanudar",
+      "label": "otra sesión",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "entrega",
+      "from": "reanudar",
+      "to": "resultado",
+      "label": "sin conversación",
+      "variant": "emphasis",
+      "role": "main"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Reanudar con contexto acotado",
+      "items": [
+        "Antes de escribir, mounts confirma el alias y meta el project_key; si no coincide, la skill se detiene",
+        "El conjunto de reanudación son cuatro find filtrados: checkpoint activo, observaciones de la sesión, decisiones activas y preferencias activas",
+        "ACM-05 midió ese conjunto en 7 729 bytes ≈ 1 933 tokens; añadir el listado de sesiones o un cat redundante lo superó"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Capturar sin ruido",
+      "items": [
+        "Se captura conocimiento durable, decisiones con rationale y checkpoints; nunca conversaciones, prompts ni salidas de herramientas",
+        "El content_hash se calcula con tools/content-hash.py: NFC, array JSON canónico y SHA-256; el esquema garantiza formato y unicidad",
+        "Una segunda captura idéntica devuelve E_CONSTRAINT; se busca la fila por hash y se actualizan duplicate_count y last_seen_at, sin reintentar"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Cerrar con un siguiente paso",
+      "items": [
+        "Un checkpoint registra goal, state, next_steps, files y open_questions; next_steps no puede estar vacío y solo uno queda activo por sesión",
+        "La sustitución de una decisión va en un batch: insertar la nueva y marcar la anterior superseded con superseded_by",
+        "E_COMMIT_UNKNOWN se reconcilia leyendo por id o por content_hash; no se reintenta a ciegas"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arquitectura de ACM",
+    "subtitle": "Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y una skill que fija las convenciones de captura y recuperación.",
+    "locale": "es",
+    "output": "docs/web/acm/arquitectura.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "agente-a",
+      "type": "external",
+      "label": "Agente A",
+      "sublabel": "trabaja y captura",
+      "icon": "person",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        130,
+        56
+      ]
+    },
+    {
+      "id": "agente-b",
+      "type": "external",
+      "label": "Agente B",
+      "sublabel": "reanuda",
+      "icon": "person",
+      "pos": [
+        190,
+        40
+      ],
+      "size": [
+        130,
+        56
+      ]
+    },
+    {
+      "id": "agente-c",
+      "type": "external",
+      "label": "Agente C",
+      "sublabel": "consulta",
+      "icon": "person",
+      "pos": [
+        340,
+        40
+      ],
+      "size": [
+        130,
+        56
+      ]
+    },
+    {
+      "id": "skill-acm",
+      "type": "frontend",
+      "label": "Skill agent-continuity",
+      "sublabel": "siete protocolos de comportamiento",
+      "pos": [
+        40,
+        140
+      ],
+      "size": [
+        290,
+        64
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI db-ai",
+      "sublabel": "rutas /mem · ETag · transacción",
+      "pos": [
+        380,
+        140
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "skill-dbai",
+      "type": "database",
+      "label": "Skill db-ai",
+      "sublabel": "formas de comando y errores",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        290,
+        56
+      ]
+    },
+    {
+      "id": "config",
+      "type": "database",
+      "label": "config.json",
+      "sublabel": "alias mem · política allow",
+      "pos": [
+        380,
+        240
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "fuentes",
+      "type": "external",
+      "label": "PRD y DESIGN de ACM",
+      "sublabel": "esquema, hash y estados",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        290,
+        56
+      ]
+    },
+    {
+      "id": "hash",
+      "type": "security",
+      "label": "content_hash",
+      "sublabel": "SHA-256 · UNIQUE",
+      "pos": [
+        380,
+        330
+      ],
+      "size": [
+        240,
+        56
+      ]
+    },
+    {
+      "id": "etag",
+      "type": "security",
+      "label": "ETag y lote",
+      "sublabel": "if-match · rollback",
+      "pos": [
+        380,
+        400
+      ],
+      "size": [
+        240,
+        56
+      ]
+    },
+    {
+      "id": "sesiones",
+      "type": "database",
+      "label": "sessions",
+      "sublabel": "procedencia",
+      "pos": [
+        700,
+        140
+      ],
+      "size": [
+        140,
+        52
+      ]
+    },
+    {
+      "id": "observaciones",
+      "type": "database",
+      "label": "observations",
+      "sublabel": "conocimiento y decisiones",
+      "pos": [
+        860,
+        140
+      ],
+      "size": [
+        160,
+        52
+      ]
+    },
+    {
+      "id": "checkpoints",
+      "type": "database",
+      "label": "checkpoints",
+      "sublabel": "reanudación",
+      "pos": [
+        700,
+        210
+      ],
+      "size": [
+        140,
+        52
+      ]
+    },
+    {
+      "id": "preferencias",
+      "type": "database",
+      "label": "preferences",
+      "sublabel": "reglas operativas",
+      "pos": [
+        860,
+        210
+      ],
+      "size": [
+        160,
+        52
+      ]
+    },
+    {
+      "id": "meta",
+      "type": "database",
+      "label": "meta",
+      "sublabel": "project_key · schema_version",
+      "pos": [
+        700,
+        280
+      ],
+      "size": [
+        200,
+        52
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Memoria del proyecto · .agent-memory/memory.db",
+      "wraps": [
+        "sesiones",
+        "observaciones",
+        "checkpoints",
+        "preferencias",
+        "meta"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Garantías de db-ai y SQLite",
+      "wraps": [
+        "hash",
+        "etag"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "a-escribe",
+      "from": "agente-a",
+      "to": "skill-acm",
+      "label": "trabaja",
+      "variant": "emphasis"
+    },
+    {
+      "id": "b-reanuda",
+      "from": "agente-b",
+      "to": "skill-acm",
+      "label": "reanuda",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-consulta",
+      "from": "agente-c",
+      "to": "skill-acm",
+      "label": "consulta",
+      "variant": "dashed"
+    },
+    {
+      "id": "consulta-formas",
+      "from": "skill-acm",
+      "to": "skill-dbai",
+      "label": "consulta formas",
+      "variant": "dashed"
+    },
+    {
+      "id": "invoca",
+      "from": "skill-acm",
+      "to": "cli",
+      "label": "invoca",
+      "variant": "emphasis"
+    },
+    {
+      "id": "resuelve",
+      "from": "config",
+      "to": "cli",
+      "label": "montaje",
+      "variant": "dashed"
+    },
+    {
+      "id": "traduce",
+      "from": "cli",
+      "to": "observaciones",
+      "label": "rutas /mem",
+      "variant": "emphasis"
+    },
+    {
+      "id": "procedencia",
+      "from": "cli",
+      "to": "sesiones",
+      "label": "FK",
+      "variant": "dashed"
+    },
+    {
+      "id": "valida",
+      "from": "cli",
+      "to": "hash",
+      "label": "valida",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          640,
+          172
+        ],
+        [
+          640,
+          358
+        ]
+      ]
+    },
+    {
+      "id": "precondiciona",
+      "from": "etag",
+      "to": "cli",
+      "label": "if-match",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          360,
+          428
+        ],
+        [
+          360,
+          172
+        ]
+      ]
+    },
+    {
+      "id": "funda",
+      "from": "fuentes",
+      "to": "skill-acm",
+      "label": "fundamenta",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Composición, no motor nuevo",
+      "items": [
+        "SQLite guarda; db-ai expone rutas, ETag, política y transacciones; la skill decide qué capturar, cómo consolidar y cómo recuperar",
+        "No hay CLI, daemon, servidor MCP, embeddings ni proveedor LLM; el esquema se crea fuera de db-ai con init.sh y sqlite3",
+        "El alias mem se registra con su política en config.json porque db-ai mount no tiene un flag para escribirla"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Garantías que se heredan",
+      "items": [
+        "TEXT NOT NULL PRIMARY KEY mantiene la tabla navegable; la FK de sesión impide conocimiento huérfano",
+        "UNIQUE(content_hash) impide el duplicado exacto con E_CONSTRAINT; el productor calcula el hash con el algoritmo de DESIGN §5.2",
+        "El ETag de la fila anterior serializa la sustitución dentro de un batch; si falla una operación, revierte todo"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fronteras que no se cruzan",
+      "items": [
+        "La política permite lectura en /mem y escritura solo en sessions, observations, checkpoints y preferences; meta es de solo lectura",
+        "No se conceden cp, mv ni rm: la obsolescencia es un cambio de estado, no un borrado",
+        "La política no es una frontera de seguridad frente al acceso directo al fichero; eso exige permisos del sistema operativo"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light" data-skill="agent-continuity">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Agent Continuity Memory (ACM): memoria de continuidad por proyecto compuesta con SQLite, db-ai y una skill. Sesiones, hallazgos, decisiones, checkpoints y preferencias bajo el alias mem.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c3aed'/%3E%3Cpath d='M16 7l8 4-8 4-8-4z' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M8 16l8 4 8-4M8 21l8 4 8-4' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>ACM · Memoria de continuidad para agentes</title>
+<script>
+(function () {
+  var skill = document.documentElement.getAttribute("data-skill") || "agent-continuity";
+  try {
+    var p = JSON.parse(localStorage.getItem(skill + ":prefs") || "{}");
+    var t = p.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", t);
+  } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
+})();
+</script>
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/microlighter/microlighter-docs.css">
+<style>
+  /* Acento propio de ACM, alineado con los SVG del ejemplo (violeta). */
+  :root[data-skill="agent-continuity"] {--accent: #6d28d9;--accent-2: #8b5cf6;--accent-3: #2563eb;--accent-soft: rgba(109, 40, 217, .10)}
+  :root[data-skill="agent-continuity"][data-theme="dark"] {--accent: #c4b5fd;--accent-2: #a78bfa;--accent-3: #93c5fd;--accent-soft: rgba(196, 181, 253, .14)}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header class="topbar">
+  <a class="brand" href="#top">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" role="presentation"><defs>
+          <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6d28d9"></stop>
+            <stop offset="1" stop-color="#8b5cf6"></stop>
+          </linearGradient>
+        </defs><rect width="32" height="32" fill="url(#brand-grad)"></rect><path d="M16 7l8 4-8 4-8-4z" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/><path d="M8 16l8 4 8-4M8 21l8 4 8-4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></svg></span>
+    <span class="brand-name">ACM<small>Memoria de continuidad</small></span>
+  </a>
+  <span class="topbar-spacer"></span>
+  <a class="icon-btn catalog-btn" href="../index.html" aria-label="Volver al índice" title="Volver al índice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H19"></path></svg>
+    <span>Índice</span>
+  </a>
+  <button class="icon-btn" id="theme-toggle" type="button" aria-label="Cambiar a tema oscuro">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+    <span>Tema</span>
+  </button>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <span class="pill"><span class="dot" aria-hidden="true"></span>SQLite + db-ai + skill · sin motor nuevo · sin MCP · sin LLM</span>
+    <h1>La sesión siguiente empieza <span class="grad">donde terminó la anterior</span></h1>
+    <p class="lead">Agent Continuity Memory guarda sesiones, hallazgos, decisiones con justificación, checkpoints de reanudación y preferencias en una base SQLite local por proyecto, montada con <code>db-ai</code> como el alias <code>mem</code>.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#que-es">Qué es</a>
+      <a class="btn btn-ghost" href="#composicion">Por qué composición</a>
+      <a class="btn btn-ghost" href="#operacion">Cómo opera</a>
+      <a class="btn btn-ghost" href="#diagramas">Los diagramas</a>
+      <a class="btn btn-ghost" href="../db-ai/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 19l-7-7 7-7"></path></svg>
+        Ver db-ai
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <nav class="toc" aria-label="Índice de la página">
+    <h2>En esta página</h2>
+    <a href="#que-es">1. Qué es</a>
+    <a href="#composicion">2. Por qué composición</a>
+    <a href="#inicializa">3. Cómo se inicializa</a>
+    <a href="#operacion">4. Cómo opera un agente</a>
+    <a href="#garantias">5. Garantías y convenciones</a>
+    <a href="#limites">6. Límites conocidos</a>
+    <a href="#diagramas">7. Los diagramas</a>
+    <a href="#verificacion">8. Verificación</a>
+    <div class="toc-extra"><a href="../index.html">Volver al índice</a></div>
+  </nav>
+
+  <main id="contenido">
+    <section id="que-es" class="section">
+      <div class="section-head"><span class="section-num">1</span><h2 class="title">Qué es</h2></div>
+      <p class="sub">Una memoria persistente de continuidad para agentes que trabajan en un proyecto. No es un registro de actividad ni una conversación guardada: es conocimiento consolidado y estado de reanudación.</p>
+
+      <p>ACM vive en <code>.agent-memory/memory.db</code>, una base SQLite por proyecto que el proyecto anfitrión excluye de Git. El operador la monta como <code>mem</code> y el agente la consulta con las rutas y comandos de <code>db-ai</code>. Una sesión posterior recupera el checkpoint activo, las decisiones vigentes y las preferencias aplicables sin leer la conversación anterior.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Tabla</th><th>Qué guarda</th></tr></thead>
+          <tbody>
+            <tr><td><code>meta</code></td><td><code>schema_version</code>, <code>project_key</code>, <code>project_name</code> y <code>created_at</code>. Es de solo lectura a través de db-ai; identifica la base y detecta una copia de otro proyecto.</td></tr>
+            <tr><td><code>sessions</code></td><td>La sesión de trabajo de ACM: agente, fuente, objetivo, estado, inicio, fin y resumen. Se abre antes de escribir conocimiento y se cierra al terminar.</td></tr>
+            <tr><td><code>observations</code></td><td>Descubrimientos, patrones, correcciones, arquitectura, aprendizajes y decisiones. Una decisión exige <code>topic_key</code> y <code>rationale</code> no vacío.</td></tr>
+            <tr><td><code>checkpoints</code></td><td>Estado de reanudación de una sesión: objetivo, estado alcanzado, próximos pasos, ficheros y preguntas abiertas. Uno activo por sesión.</td></tr>
+            <tr><td><code>preferences</code></td><td>Preferencias operativas del proyecto por clave, con valor, motivo y procedencia. Son del proyecto, no globales ni por agente en esta versión.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>La identidad de cada fila es un UUIDv7 textual que genera el productor. Las marcas temporales son ISO-8601 en UTC. El <code>content_hash</code> es SHA-256 con prefijo <code>sha256:</code> y se calcula antes de insertar.</p>
+
+      <div class="note">
+        <p><strong>No guarda conversaciones, prompts ni salidas de herramientas.</strong> Tampoco secretos, credenciales ni datos personales. La captura es deliberada y consolidada, no automática.</p>
+      </div>
+    </section>
+
+    <section id="composicion" class="section">
+      <div class="section-head"><span class="section-num">2</span><h2 class="title">Por qué composición</h2></div>
+      <p class="sub">ACM no añade un motor de memoria, una CLI, un servidor MCP ni una dependencia de proveedor LLM. Usa tres piezas que ya existen y reparte responsabilidades.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Pieza</th><th>Aporta</th><th>No aporta</th></tr></thead>
+          <tbody>
+            <tr><td>SQLite con el esquema de ACM</td><td>PK única, claves foráneas, <code>CHECK</code>, <code>UNIQUE</code> y orden de clave.</td><td>Semántica de consolidación ni comportamiento del agente.</td></tr>
+            <tr><td><code>db-ai</code> v0.2.0</td><td>Rutas virtuales, JSON versionado, ETag, política por prefijo, transacciones, auditoría y límites.</td><td>DDL, triggers, búsqueda semántica, orden descendente ni proyección de columnas.</td></tr>
+            <tr><td>Skill <code>agent-continuity</code></td><td>Cuándo capturar, elección de tipo y certeza, canonicalización del hash, <code>topic_key</code>, revisión y presupuesto de contexto.</td><td>Garantías del motor; no puede impedir que un proceso externo salte la política.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p><strong>Regla de composición.</strong> ACM usa db-ai tal como está documentado. No modifica <code>cmd/db-ai/</code> ni <code>internal/</code>; no crea comandos, flags ni operaciones nuevas. Una carencia de db-ai se documenta como propuesta, nunca como ampliación del alcance de ACM.</p>
+      </div>
+
+      <p>La separación entre garantías y convenciones es explícita y atraviesa todo el diseño: el motor impone lo determinista; la skill aporta lo demás y lo verifica después de escribir.</p>
+    </section>
+
+    <section id="inicializa" class="section">
+      <div class="section-head"><span class="section-num">3</span><h2 class="title">Cómo se inicializa</h2></div>
+      <p class="sub">Un script idempotente crea la base, aplica esquema y seed si faltan, registra el montaje y verifica. Se puede ejecutar desde cualquier directorio.</p>
+
+      <div class="code"><pre><code class="language-bash">bash init.sh
+
+# Otro proyecto o convivir con otro montaje:
+ACM_HOME=/ruta/del/proyecto ACM_ALIAS=mem-b bash init.sh</code></pre></div>
+
+      <div class="flow">
+        <div class="flow-step"><code>paso 1</code><strong>Crear</strong><p><code>.agent-memory/</code> y <code>memory.db</code> si faltan. El proyecto anfitrión excluye el directorio en su <code>.gitignore</code>.</p></div>
+        <div class="flow-step"><code>paso 2</code><strong>Esquema</strong><p>Aplica <code>schema.sql</code> solo si la base no existe o le faltan tablas, con <code>PRAGMA foreign_keys = ON</code>.</p></div>
+        <div class="flow-step"><code>paso 3</code><strong>Seed</strong><p>Aplica <code>seed.sql</code> solo si la base no tiene datos; genera el <code>project_key</code> de la base.</p></div>
+        <div class="flow-step"><code>paso 4</code><strong>Montaje</strong><p>Registra el alias <code>mem</code> y su política en <code>config.json</code> con una mezcla atómica que conserva otros alias.</p></div>
+        <div class="flow-step"><code>paso 5</code><strong>Verificar</strong><p><code>db-ai mounts</code>, <code>db-ai ls /mem</code> y la lectura de <code>meta</code> confirman que la base responde.</p></div>
+      </div>
+
+      <div class="code"><pre><code class="language-bash">db-ai mounts
+db-ai ls /mem
+db-ai find /mem/meta --where 'name=project_key' --limit 1</code></pre></div>
+
+      <p>El alias es único por configuración de usuario: si <code>mem</code> ya apunta a otra base, <code>init.sh</code> se detiene en lugar de pisarla. <code>ACM_HOME</code> elige la raíz del proyecto, <code>ACM_ALIAS</code> el alias y <code>XDG_CONFIG_HOME</code> la ubicación de la configuración de db-ai.</p>
+
+      <h3>Por qué el montaje no lo hace <code>db-ai mount</code></h3>
+      <p><code>db-ai mount --mode rw</code> exige una política de escritura explícita y la CLI no tiene un flag para escribirla: devuelve <code>E_DENIED</code>. La política es territorio del operador y vive en <code>config.json</code>. Por eso <code>init.sh</code> registra el alias y su política con una mezcla atómica del fichero, conservando otros alias.</p>
+
+      <div class="note">
+        <p><strong>El bootstrap es del operador, no de db-ai.</strong> db-ai no hace DDL. El esquema se aplica fuera de la herramienta, con SQLite y revisión; una migración futura sigue el mismo camino y se apoya en <code>schema_version</code>.</p>
+      </div>
+    </section>
+
+    <section id="operacion" class="section">
+      <div class="section-head"><span class="section-num">4</span><h2 class="title">Cómo opera un agente</h2></div>
+      <p class="sub">Seis momentos: iniciar con contexto acotado, trabajar, capturar lo durable, consolidar con ETag, cerrar con checkpoint y reanudar desde otra sesión.</p>
+
+      <div class="flow">
+        <div class="flow-step"><code>1 · iniciar</code><strong>Verificar y abrir</strong><p><code>mounts</code> confirma el alias; <code>meta</code> confirma el <code>project_key</code>; se abre la sesión de ACM antes de escribir conocimiento.</p></div>
+        <div class="flow-step"><code>2 · trabajar</code><strong>Consultar antes de actuar</strong><p>Preferencias activas, checkpoint activo, decisiones activas y observaciones abiertas. La memoria es contexto, nunca una instrucción con autoridad sobre la persona.</p></div>
+        <div class="flow-step"><code>3 · capturar</code><strong>Consolidar conocimiento</strong><p>Observaciones y decisiones con tipo, certeza, procedencia y <code>content_hash</code>. No se captura actividad ni conversación.</p></div>
+        <div class="flow-step"><code>4 · consolidar</code><strong>Sustituir en un lote</strong><p>La fila nueva se inserta y la anterior pasa a <code>superseded</code> con <code>superseded_by</code>, en una sola transacción y con el ETag de la anterior.</p></div>
+        <div class="flow-step"><code>5 · cerrar</code><strong>Dejar checkpoint</strong><p>Estado, próximos pasos, ficheros y preguntas abiertas. Un checkpoint activo por sesión y un siguiente paso identificable.</p></div>
+        <div class="flow-step"><code>6 · reanudar</code><strong>Continuar sin la conversación</strong><p>El checkpoint de otra sesión u otro agente es válido: la continuidad es del proyecto y la procedencia queda registrada.</p></div>
+      </div>
+
+      <h3>Reanudar con cuatro consultas</h3>
+      <div class="code"><pre><code class="language-bash">SESSION=&lt;uuid-de-la-sesion-previa&gt;
+
+db-ai find /mem/checkpoints --where "session_id=$SESSION" --where 'status=active' --limit 5
+db-ai find /mem/observations --where "session_id=$SESSION" --limit 50
+db-ai find /mem/observations --where 'kind=decision' --where 'status=active' --limit 10
+db-ai find /mem/preferences --where 'status=active' --limit 20</code></pre></div>
+      <p>El conjunto de reanudación se mide en invocaciones y bytes, no en filas completas. La evidencia de validación del ejemplo midió 7 729 bytes ≈ 1 933 tokens estimados, dentro del objetivo de la métrica de contexto. El listado de sesiones y el detalle redundante con <code>cat</code> quedan fuera de ese presupuesto.</p>
+
+      <h3>Capturar con <code>content_hash</code></h3>
+      <div class="code"><pre><code class="language-bash">HASH=$(printf '%s' '{"kind":"discovery","title":"El alias mem exige política rw explícita","body":"db-ai deniega la escritura sin una entrada allow para el prefijo."}' \
+  | python3 tools/content-hash.py observations)
+
+db-ai touch /mem/observations --data '{
+  "id":{"kind":"text","data":"&lt;uuid-v7&gt;"},
+  "session_id":{"kind":"text","data":"&lt;uuid-sesion&gt;"},
+  "agent_id":{"kind":"text","data":"agent-a"},
+  "source":{"kind":"text","data":"agent"},
+  "kind":{"kind":"text","data":"discovery"},
+  "title":{"kind":"text","data":"El alias mem exige política rw explícita"},
+  "body":{"kind":"text","data":"db-ai deniega la escritura sin una entrada allow para el prefijo."},
+  "confidence":{"kind":"text","data":"confirmed"},
+  "last_seen_at":{"kind":"text","data":"&lt;UTC&gt;"},
+  "content_hash":{"kind":"text","data":"'"$HASH"'"},
+  "created_at":{"kind":"text","data":"&lt;UTC&gt;"},
+  "updated_at":{"kind":"text","data":"&lt;UTC&gt;"}
+}'</code></pre></div>
+
+      <p>El helper <code>tools/content-hash.py</code> aplica el algoritmo del DESIGN: NFC, recorte, colapso de espacios, array JSON canónico y SHA-256. El esquema garantiza el formato y la unicidad del hash, no el algoritmo; todos los productores deben calcularlo igual. Una segunda captura idéntica devuelve <code>E_CONSTRAINT</code> y no se reintenta.</p>
+
+      <h3>Sustituir una decisión en un lote</h3>
+      <div class="code"><pre><code class="language-bash">db-ai batch --data '[
+  {"op":"touch","path":"/mem/observations","data":{"id":{"kind":"text","data":"&lt;uuid-nueva&gt;"},"content_hash":{"kind":"text","data":"sha256:&lt;hash&gt;"}}},
+  {"op":"write","path":"/mem/observations/&lt;uuid-anterior&gt;","if_match":"sha256:&lt;ETag&gt;","data":{"status":{"kind":"text","data":"superseded"},"superseded_by":{"kind":"text","data":"&lt;uuid-nueva&gt;"}}}
+]'</code></pre></div>
+      <p>La primera operación inserta la fila completa; aquí se abrevia para mostrar el orden. La segunda apunta a una fila preexistente, nunca a una creada en el mismo lote. El ETag de la anterior serializa la escritura: dos agentes que sustituyan la misma fila compiten por él y el segundo recibe <code>E_CONFLICT</code>.</p>
+
+      <h3>Cerrar con ETag y checkpoint</h3>
+      <div class="code"><pre><code class="language-bash">ETAG=$(db-ai cat /mem/sessions/&lt;uuid&gt; | sed -n 's/.*"etag":"\([^"]*\)".*/\1/p')
+
+db-ai write /mem/sessions/&lt;uuid&gt; --data '{
+  "status":{"kind":"text","data":"closed"},
+  "ended_at":{"kind":"text","data":"&lt;UTC&gt;"},
+  "summary":{"kind":"text","data":"&lt;resumen&gt;"},
+  "updated_at":{"kind":"text","data":"&lt;UTC&gt;"}
+}' --if-match "$ETAG"</code></pre></div>
+
+      <p>El checkpoint se captura con <code>goal</code>, <code>state</code>, <code>next_steps</code>, <code>files</code> y <code>open_questions</code>; <code>next_steps</code> no puede estar vacío. Si la sesión ya tenía uno activo, se sustituye con el mismo protocolo de lote. No lleva <code>review_after</code>: su vigencia la marca el checkpoint posterior.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Operación de memoria</th><th>Operación de db-ai</th><th>Garantía que se usa</th></tr></thead>
+          <tbody>
+            <tr><td>Descubrir tablas y columnas</td><td><code>mounts</code>, <code>ls</code>, <code>describe</code>, <code>stat</code></td><td>Catálogo y capacidades.</td></tr>
+            <tr><td>Leer una fila o un campo</td><td><code>cat</code> sobre la ruta</td><td>Identidad y ETag.</td></tr>
+            <tr><td>Filtrar o buscar</td><td><code>find</code> con <code>--where</code> y <code>grep</code> literal, con límite</td><td>Operadores documentados y orden por PK.</td></tr>
+            <tr><td>Insertar una fila</td><td><code>touch</code></td><td>INSERT sin precondición.</td></tr>
+            <tr><td>Actualizar estado o metadatos</td><td><code>write</code> con <code>if_match</code></td><td>UPDATE con ETag.</td></tr>
+            <tr><td>Varias filas en una transacción</td><td><code>batch</code></td><td>Rollback total y máximo de 100 operaciones.</td></tr>
+            <tr><td>Eliminar o renombrar</td><td>No se usa <code>rm</code> ni <code>mv</code></td><td>La política los deniega; la obsolescencia es un estado.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="garantias" class="section">
+      <div class="section-head"><span class="section-num">5</span><h2 class="title">Garantías y convenciones</h2></div>
+      <p class="sub">La tabla separa lo que el motor impone de lo que la skill decide. Presentar una convención como garantía es un error de diseño.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Aspecto</th><th>Garantía determinista</th><th>Convención</th></tr></thead>
+          <tbody>
+            <tr><td>Duplicado exacto</td><td><code>UNIQUE(content_hash)</code>; la segunda inserción devuelve <code>E_CONSTRAINT</code>.</td><td>Cómo recuperar la fila y actualizar <code>duplicate_count</code> y <code>last_seen_at</code>.</td></tr>
+            <tr><td>Sustitución</td><td><code>CHECK</code> del enlace y lote transaccional de db-ai.</td><td>Cuándo sustituir y verificar que queda una sola activa.</td></tr>
+            <tr><td>Ciclo de vida</td><td>Valores permitidos de <code>status</code> y <code>review_after</code>.</td><td>Cuándo marcar <code>needs_review</code> u <code>obsolete</code>.</td></tr>
+            <tr><td>Una decisión activa por tema</td><td>Protocolo de lote con ETag; no hay índice único parcial.</td><td>Reconciliación de dos primeras capturas concurrentes.</td></tr>
+            <tr><td>Procedencia</td><td>Columnas obligatorias y FK de sesión.</td><td>No reescribir <code>agent_id</code>, <code>session_id</code> ni <code>created_at</code>.</td></tr>
+            <tr><td>Acceso</td><td><code>touch</code> y <code>write</code> solo en <code>sessions</code>, <code>observations</code>, <code>checkpoints</code> y <code>preferences</code>: ninguna escritura en <code>/mem/meta</code> y ni <code>cp</code>, <code>mv</code> ni <code>rm</code>; lo demás devuelve <code>E_DENIED</code>.</td><td>No es una frontera de seguridad frente al acceso directo al fichero.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>El esquema aporta además <code>TEXT NOT NULL PRIMARY KEY</code> para que la tabla sea navegable, la FK <code>session_id → sessions(id)</code> para no crear conocimiento huérfano y <code>CHECK</code> de enumeraciones y de no vacío. No hay triggers: db-ai rechaza los triggers de escritura sobre la tabla objetivo. La generación del hash, la promoción de estados y la caducidad son convenciones verificables, no garantías del motor.</p>
+
+      <div class="note">
+        <p><strong>Estados.</strong> <code>active</code> es vigente. <code>superseded</code> exige <code>superseded_by</code> y es terminal. <code>obsolete</code> es conocimiento invalidado sin reemplazo. <code>needs_review</code> es dudoso, conflictivo o vencido, y vuelve a <code>active</code>, <code>superseded</code> u <code>obsolete</code> cuando se resuelve. Una fila terminal no se reactiva: si el conocimiento vuelve, se captura una fila nueva.</p>
+      </div>
+    </section>
+
+    <section id="limites" class="section">
+      <div class="section-head"><span class="section-num">6</span><h2 class="title">Límites conocidos</h2></div>
+      <p class="sub">Lo que ACM no promete, escrito para que no se descubra en producción.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Límite</th><th>Consecuencia</th></tr></thead>
+          <tbody>
+            <tr><td>Sin embeddings, FTS ni ranking</td><td><code>grep</code> es una subcadena literal y sensible a mayúsculas. La recuperabilidad se gana en la captura: títulos y <code>topic_key</code> con términos distintivos.</td></tr>
+            <tr><td><code>find</code> devuelve filas completas y ordena por clave ascendente</td><td>No hay proyección ni orden descendente. El control de contexto depende del filtro, del límite y del tamaño del texto; la recencia se estima por el UUIDv7 mayor de una ventana acotada.</td></tr>
+            <tr><td>La política no es una frontera de seguridad</td><td>Un proceso con acceso al fichero o a <code>config.json</code> puede saltarla. La separación real exige permisos del sistema operativo.</td></tr>
+            <tr><td>Primera captura concurrente de un tema</td><td>Sin fila activa previa, dos agentes pueden insertar dos activas. La skill verifica después, las marca <code>needs_review</code> y registra la reconciliación.</td></tr>
+            <tr><td>Sin copia automática</td><td>La base no se versiona. La copia es del operador; un <code>cp</code> del fichero SQLite es suficiente y queda fuera del MVP.</td></tr>
+            <tr><td>Sin DDL, triggers ni migraciones automáticas</td><td>El esquema se aplica fuera de db-ai. <code>schema_version</code> habilita migraciones manuales y revisadas.</td></tr>
+            <tr><td>Sin <code>cp</code>, <code>mv</code> ni <code>rm</code> por política</td><td>La obsolescencia es un cambio de estado. La identidad UUID permanece estable como ruta.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="diagramas" class="section">
+      <div class="section-head"><span class="section-num">7</span><h2 class="title">Los diagramas</h2><span class="chip-repo">de este repositorio</span></div>
+      <p class="sub">Las tres piezas de la composición y el ciclo que convierte una sesión en continuidad.</p>
+
+      <div class="grid cols-2">
+        <a class="card card-link" href="flujo-de-trabajo.html">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6z"></path><path d="M10 8.5h2a2 2 0 0 1 2 2v5"></path></svg></div>
+          <h3>Ciclo de continuidad</h3>
+          <p>Iniciar con contexto acotado, trabajar, capturar, consolidar con ETag, cerrar con checkpoint y reanudar desde otra sesión.</p>
+          <span class="go">Abrir el diagrama →</span>
+        </a>
+        <a class="card card-link" href="arquitectura.html">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></div>
+          <h3>Arquitectura</h3>
+          <p>La base SQLite por proyecto, la CLI db-ai con su política y ETag, y la skill que decide qué capturar y cómo recuperar.</p>
+          <span class="go">Abrir el diagrama →</span>
+        </a>
+      </div>
+
+      <p>Cada diagrama es un artefacto de Archify con su especificación <code>.json</code> y su recibo <code>.delivery.json</code> junto al HTML. Se abre como página suelta y se vuelve con el botón atrás o con el índice de esta página.</p>
+    </section>
+
+    <section id="verificacion" class="section">
+      <div class="section-head"><span class="section-num">8</span><h2 class="title">Verificación</h2></div>
+      <p class="sub">El ejemplo se comprueba con pruebas y runbooks ejecutables; no se declara verificado lo que no se ejecutó.</p>
+
+      <div class="code"><pre><code class="language-bash">bash init.sh
+bash tests/run-tests.sh</code></pre></div>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Comprobación</th><th>Qué demuestra</th></tr></thead>
+          <tbody>
+            <tr><td><code>bash init.sh</code></td><td>Esquema, seed, montaje y verificación con <code>db-ai mounts</code>, <code>ls /mem</code> y lectura de <code>meta</code>. Ejecutarlo dos veces deja el mismo estado.</td></tr>
+            <tr><td><code>bash tests/run-tests.sh</code></td><td>Init, lectura, seed, escritura con ETag, conflicto, deduplicación, política y segundo init sobre base y configuración temporales. Cada caso imprime <code>ok</code> o <code>FALLO</code>; el código de salida es 0 solo si todos pasan.</td></tr>
+            <tr><td><code>scenarios/</code></td><td>Continuidad A→B e integridad: aislamiento entre proyectos, conflicto de ETag, deduplicación exacta y <code>E_DENIED</code> en prefijos sin escritura.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p>Esta página resume el <a href="../../../examples/agent-continuity/README.md">README del ejemplo</a>, su <a href="../../../examples/agent-continuity/docs/PRD.md">PRD</a>, su <a href="../../../examples/agent-continuity/docs/DESIGN.md">DESIGN</a> y la <a href="../../../examples/agent-continuity/skill/SKILL.md">skill agent-continuity</a>. Si una afirmación de aquí contradice a esos artefactos, mandan ellos.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="footer">
+  <span><code>docs/web/acm/</code> · ACM v0.1.0 · documento en español</span>
+  <span><a href="../index.html">Índice</a> · <a href="#top">Volver arriba</a> · <a href="../../../examples/agent-continuity/README.md">README</a> · <a href="../../../examples/agent-continuity/docs/PRD.md">PRD</a> · <a href="../../../examples/agent-continuity/docs/DESIGN.md">DESIGN</a> · <a href="flujo-de-trabajo.html">Ciclo</a> · <a href="arquitectura.html">Arquitectura</a></span>
+  <span>Página estática: no envía datos ni carga recursos externos · <code>docs/web/acm/index.html</code></span>
+</footer>
+
+<a class="to-top" id="to-top" href="#top" aria-label="Volver arriba" title="Volver arriba">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>
+</a>
+
+<script src="../assets/site.js"></script>
+<script src="../assets/microlighter/microlighter-docs.js"></script>
+</body>
+</html>

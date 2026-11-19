@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "731d4af4-b521-4970-a848-af2497e16397",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/acm/arquitectura.json",
+  "output": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/acm/arquitectura.html",
+  "specification": {
+    "sha256": "f8e0dd6dc69110e78ba81433aeade5e935bed057be6e9cfcbe2ee279f44327b2",
+    "bytes": 7736
+  },
+  "artifact": {
+    "sha256": "4d92a75c0167181ab9aff88f6e99483d62aece36e46f73833c36850920db441e",
+    "bytes": 839628
+  }
+}
