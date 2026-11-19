@@ -544,6 +544,10 @@ func (s Service) Describe(ctx context.Context, p vfs.Path) (describeData, error)
 	if p.Kind != vfs.KindTable {
 		return describeData{}, fmt.Errorf("%w: describe needs a table path /ALIAS/TABLE", storage.ErrUnsupported)
 	}
+	m, err := s.mount(p.Alias)
+	if err != nil {
+		return describeData{}, err
+	}
 	st, err := s.open(p.Alias)
 	if err != nil {
 		return describeData{}, err
@@ -570,7 +574,7 @@ func (s Service) Describe(ctx context.Context, p vfs.Path) (describeData, error)
 		Triggers:    t.Triggers,
 		Capabilities: capabilities{
 			Readable:  t.Readable,
-			Writable:  false,
+			Writable:  t.Navigable && len(t.Triggers) == 0 && m.Mode == "rw" && (writeOpAllowed(m, "touch", path) || writeOpAllowed(m, "write", path)),
 			Navigable: t.Navigable,
 		},
 		Limitations: append([]string{}, t.Limitations...),
@@ -599,7 +603,6 @@ func (s Service) Describe(ctx context.Context, p vfs.Path) (describeData, error)
 	for _, c := range t.PrimaryKey() {
 		data.PrimaryKey = append(data.PrimaryKey, c.Name)
 	}
-	data.Limitations = append(data.Limitations, "writes are not available in this release")
 	return data, nil
 }
 

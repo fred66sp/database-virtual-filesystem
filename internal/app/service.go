@@ -19,11 +19,13 @@ import (
 )
 
 // Service is the command implementation shared by the CLI layer. ConfigDir is
-// the db-ai config directory and StateDir the sessions directory; both are
-// injected so tests never touch the real ones.
+// the db-ai config directory, StateDir the sessions directory and AuditDir the
+// state directory that holds the audit log; all are injected so tests never
+// touch the real ones.
 type Service struct {
 	ConfigDir string
 	StateDir  string
+	AuditDir  string
 	Timeout   time.Duration
 }
 

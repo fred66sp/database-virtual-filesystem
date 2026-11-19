@@ -28,14 +28,25 @@ type Session struct {
 // SessionsDir returns $XDG_STATE_HOME/db-ai/sessions with the documented
 // fallback ~/.local/state/db-ai (DESIGN §9).
 func SessionsDir() (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "sessions"), nil
+}
+
+// StateDir returns $XDG_STATE_HOME/db-ai with the documented fallback
+// ~/.local/state/db-ai. Sessions and the audit log live under it, never inside
+// the user's database (DESIGN §9, §11).
+func StateDir() (string, error) {
 	if base := os.Getenv("XDG_STATE_HOME"); base != "" {
-		return filepath.Join(base, "db-ai", "sessions"), nil
+		return filepath.Join(base, "db-ai"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate state directory: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "db-ai", "sessions"), nil
+	return filepath.Join(home, ".local", "state", "db-ai"), nil
 }
 
 // ValidSessionID accepts the ASCII identity D-18 requires. A period is allowed

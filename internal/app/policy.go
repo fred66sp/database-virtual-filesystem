@@ -17,6 +17,20 @@ func readOpAllowed(m state.Mount, op, path string) bool {
 	if len(m.Allow) == 0 {
 		return true
 	}
+	return allowMatches(m, op, path)
+}
+
+// writeOpAllowed is the mutation side of FR-13 and D-17: there is no default
+// grant at all. An explicit allow entry must cover the operation and the whole
+// path, segment by segment; a read-write mount without a policy writes nothing.
+func writeOpAllowed(m state.Mount, op, path string) bool {
+	if len(m.Allow) == 0 {
+		return false
+	}
+	return allowMatches(m, op, path)
+}
+
+func allowMatches(m state.Mount, op, path string) bool {
 	target, ok := pathSegments(path)
 	if !ok {
 		return false

@@ -176,7 +176,7 @@ var commands = []commandSpec{
 		roles:         []argRole{argPath},
 		flags:         []flagSpec{flagData, flagDryRun},
 		requiredFlags: []string{"data"},
-		wp:            "WP-05",
+		wp:            "WP-04",
 	},
 	{
 		name:          "write",
@@ -185,7 +185,7 @@ var commands = []commandSpec{
 		roles:         []argRole{argPath},
 		flags:         []flagSpec{flagData, flagIfMatch, flagDryRun},
 		requiredFlags: []string{"data", "if-match"},
-		wp:            "WP-05",
+		wp:            "WP-04",
 	},
 	{
 		name:          "cp",
