@@ -1,0 +1,1 @@
+{"version":1,"ok":false,"error":{"code":"E_USAGE","message":"invalid virtual path: alias \"a.b\" is not [A-Za-z0-9_-]+"}}
