@@ -68,8 +68,145 @@ func (r *reader) Apply(ctx context.Context, m storage.Mutation) (storage.Row, er
 		return r.insert(ctx, t, m.Fields)
 	case "write":
 		return r.update(ctx, t, m.Key, m.Fields, m.IfMatch)
+	case "cp":
+		return r.copyRow(ctx, t, m.Key, m.Destination, m.IfMatch)
+	case "mv":
+		return r.rename(ctx, t, m.Key, m.Destination, m.IfMatch)
+	case "rm":
+		return r.remove(ctx, t, m.Key, m.IfMatch)
 	}
 	return storage.Row{}, fmt.Errorf("%w: mutation kind %q", storage.ErrUnsupported, m.Kind)
+}
+
+// requireAbsentDestination is the cp/mv target check (FR-07, FR-09): an
+// existing destination is a conflict, never an overwrite.
+func (r *reader) requireAbsentDestination(ctx context.Context, t *catalog.Table, dest storage.Key) error {
+	if _, err := r.Get(ctx, t.Name, dest); err == nil {
+		return fmt.Errorf("%w: destination row already exists in table %q", storage.ErrConflict, t.Name)
+	} else if !errors.Is(err, storage.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// copyRow is `cp` (FR-07): INSERT of the source's ordinary columns under an
+// explicit destination key. The ETag precondition belongs to the source row
+// (D-6); an existing destination is a conflict, never an overwrite.
+func (r *reader) copyRow(ctx context.Context, t *catalog.Table, source, dest storage.Key, ifMatch string) (storage.Row, error) {
+	if ifMatch == "" {
+		return storage.Row{}, fmt.Errorf("%w: cp requires an ETag precondition", storage.ErrInvalid)
+	}
+	pk := t.PrimaryKey()
+	if len(dest) != len(pk) {
+		return storage.Row{}, fmt.Errorf("%w: destination key has %d values, table %q needs %d", storage.ErrNotFound, len(dest), t.Name, len(pk))
+	}
+	src, err := r.Get(ctx, t.Name, source)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	if src.ETag != ifMatch {
+		return storage.Row{}, fmt.Errorf("%w: ETag %q no longer matches table %q", storage.ErrConflict, ifMatch, t.Name)
+	}
+	if err := r.requireAbsentDestination(ctx, t, dest); err != nil {
+		return storage.Row{}, err
+	}
+
+	destByColumn := make(map[string]storage.Value, len(pk))
+	for i, column := range pk {
+		destByColumn[column.Name] = dest[i]
+	}
+	fields := make(map[string]storage.Value, len(t.Columns))
+	for i, column := range t.Columns {
+		switch {
+		case column.Generated:
+			continue
+		case column.PKOrder > 0:
+			fields[column.Name] = destByColumn[column.Name]
+		default:
+			fields[column.Name] = src.Fields[i].Value
+		}
+	}
+	return r.insert(ctx, t, fields)
+}
+
+// rename is `mv` (FR-09): UPDATE of a simple, non-generated primary key. Any
+// incoming reference could be affected by the engine, so it is denied
+// conservatively instead of being rewritten.
+func (r *reader) rename(ctx context.Context, t *catalog.Table, source, dest storage.Key, ifMatch string) (storage.Row, error) {
+	if ifMatch == "" {
+		return storage.Row{}, fmt.Errorf("%w: mv requires an ETag precondition", storage.ErrInvalid)
+	}
+	pk := t.PrimaryKey()
+	if len(pk) != 1 {
+		return storage.Row{}, fmt.Errorf("%w: table %q has a composite primary key, so mv is denied", storage.ErrUnsupported, t.Name)
+	}
+	if len(t.Incoming) > 0 {
+		return storage.Row{}, fmt.Errorf("%w: table %q has incoming references, so mv is denied", storage.ErrUnsupported, t.Name)
+	}
+	if len(dest) != 1 {
+		return storage.Row{}, fmt.Errorf("%w: destination key has %d values, table %q needs 1", storage.ErrNotFound, len(dest), t.Name)
+	}
+	current, err := r.Get(ctx, t.Name, source)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	if current.ETag != ifMatch {
+		return storage.Row{}, fmt.Errorf("%w: ETag %q no longer matches table %q", storage.ErrConflict, ifMatch, t.Name)
+	}
+	if err := r.requireAbsentDestination(ctx, t, dest); err != nil {
+		return storage.Row{}, err
+	}
+
+	destArg, err := bindValue(dest[0])
+	if err != nil {
+		return storage.Row{}, err
+	}
+	keyArgs, err := bindKey(source)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	args := append([]any{destArg}, keyArgs...)
+	query := "UPDATE " + quoteIdent(t.Name) + " SET " + quoteIdent(pk[0].Name) + " = ? WHERE " + keyConditions(pk)
+	res, err := r.q.ExecContext(ctx, query, args...)
+	if err != nil {
+		return storage.Row{}, classify(err)
+	}
+	if err := changedExactlyOne(res); err != nil {
+		return storage.Row{}, err
+	}
+	return r.Get(ctx, t.Name, dest)
+}
+
+// remove is `rm` (FR-08): DELETE of exactly one row, never recursive. Incoming
+// references are denied even with RESTRICT: their outcome is not part of the
+// plan and the MVP stays conservative.
+func (r *reader) remove(ctx context.Context, t *catalog.Table, key storage.Key, ifMatch string) (storage.Row, error) {
+	if ifMatch == "" {
+		return storage.Row{}, fmt.Errorf("%w: rm requires an ETag precondition", storage.ErrInvalid)
+	}
+	if len(t.Incoming) > 0 {
+		return storage.Row{}, fmt.Errorf("%w: table %q has incoming references, so rm is denied", storage.ErrUnsupported, t.Name)
+	}
+	current, err := r.Get(ctx, t.Name, key)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	if current.ETag != ifMatch {
+		return storage.Row{}, fmt.Errorf("%w: ETag %q no longer matches table %q", storage.ErrConflict, ifMatch, t.Name)
+	}
+	args, err := bindKey(key)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	query := "DELETE FROM " + quoteIdent(t.Name) + " WHERE " + keyConditions(t.PrimaryKey())
+	res, err := r.q.ExecContext(ctx, query, args...)
+	if err != nil {
+		return storage.Row{}, classify(err)
+	}
+	if err := changedExactlyOne(res); err != nil {
+		return storage.Row{}, err
+	}
+	return current, nil
 }
 
 // denyCascades is the conservative DESIGN §8 rejection: an engine-side FK

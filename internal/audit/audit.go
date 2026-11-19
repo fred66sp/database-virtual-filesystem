@@ -20,7 +20,9 @@ const (
 )
 
 // Record is one JSONL line. Code is the stable error code ("OK" on success) and
-// Status is attempt, ok, denied, error, unknown or dry-run.
+// Status is attempt, ok, denied, error, unknown or dry-run. Dest is the
+// destination a cp or mv creates, redacted like Resource; it is empty for the
+// other operations.
 type Record struct {
 	RequestID string `json:"request_id"`
 	Timestamp string `json:"timestamp"`
@@ -29,6 +31,7 @@ type Record struct {
 	Alias     string `json:"alias"`
 	Table     string `json:"table,omitempty"`
 	Resource  string `json:"resource"`
+	Dest      string `json:"dest,omitempty"`
 	Status    string `json:"status"`
 	Code      string `json:"code"`
 }

@@ -8,15 +8,27 @@ import (
 	"dbvfs/internal/app"
 )
 
-// executeMutation dispatches the two WP-04 vehicle mutations. cp, mv, rm and
-// batch stay for WP-05/WP-06.
+// executeMutation dispatches touch, write, cp, mv and rm. batch stays for
+// WP-06.
 func executeMutation(inv *invocation, stdin io.Reader) (result, error) {
+	// D-7: only mv and rm need --apply. Without it they may still plan with
+	// --dry-run; otherwise the invocation is incomplete, not executed.
+	if (inv.spec.name == "mv" || inv.spec.name == "rm") && !inv.apply && !inv.dryRun {
+		return result{}, usageError("%s requires %q", inv.spec.name, "--apply")
+	}
 	svc, err := newService(inv)
 	if err != nil {
 		return result{}, err
 	}
 	if err := resolvePath(&svc, inv); err != nil {
 		return result{}, err
+	}
+	if inv.destRelative {
+		dest, err := svc.Resolve(inv.session, inv.destRaw)
+		if err != nil {
+			return result{}, err
+		}
+		inv.dest = &dest
 	}
 	payload, err := dataPayload(inv, stdin)
 	if err != nil {
@@ -32,6 +44,17 @@ func executeMutation(inv *invocation, stdin io.Reader) (result, error) {
 		return result{data: data}, err
 	case "write":
 		data, err := svc.Write(ctx, *inv.path, payload, inv.ifMatch, opts)
+		return result{data: data}, err
+	case "cp", "mv":
+		var data any
+		if inv.spec.name == "cp" {
+			data, err = svc.Copy(ctx, *inv.path, *inv.dest, inv.ifMatch, opts)
+		} else {
+			data, err = svc.Move(ctx, *inv.path, *inv.dest, inv.ifMatch, opts)
+		}
+		return result{data: data}, err
+	case "rm":
+		data, err := svc.Remove(ctx, *inv.path, inv.ifMatch, opts)
 		return result{data: data}, err
 	}
 	return result{}, unreachableError(inv.spec.name)

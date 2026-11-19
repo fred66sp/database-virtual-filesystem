@@ -202,7 +202,7 @@ var commands = []commandSpec{
 		usage:         "mv ROW DEST_ROW --if-match ETAG --apply",
 		roles:         []argRole{argPath, argDestPath},
 		flags:         []flagSpec{flagIfMatch, flagApply, flagDryRun},
-		requiredFlags: []string{"if-match", "apply"},
+		requiredFlags: []string{"if-match"},
 		wp:            "WP-05",
 	},
 	{
@@ -211,7 +211,7 @@ var commands = []commandSpec{
 		usage:         "rm ROW --if-match ETAG --apply",
 		roles:         []argRole{argPath},
 		flags:         []flagSpec{flagIfMatch, flagApply, flagDryRun},
-		requiredFlags: []string{"if-match", "apply"},
+		requiredFlags: []string{"if-match"},
 		wp:            "WP-05",
 	},
 	{

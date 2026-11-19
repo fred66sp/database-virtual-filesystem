@@ -73,7 +73,7 @@ func execute(inv *invocation, stdin io.Reader) (result, error) {
 	switch inv.spec.name {
 	case "cd", "pwd":
 		return executeSession(inv)
-	case "touch", "write":
+	case "touch", "write", "cp", "mv", "rm":
 		return executeMutation(inv, stdin)
 	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat",
 		"find", "grep", "export":

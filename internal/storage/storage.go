@@ -124,7 +124,10 @@ type Query struct {
 	Search     *Search
 }
 
-// Mutation describes a single write.
+// Mutation describes a single write. Kind is one of touch, write, cp, mv or rm.
+// cp and mv carry the source in Key and the destination key in Destination; rm
+// uses Key alone. IfMatch is the mandatory ETag precondition for write, cp, mv
+// and rm.
 type Mutation struct {
 	Kind, Table, IfMatch string
 	Key, Destination     Key

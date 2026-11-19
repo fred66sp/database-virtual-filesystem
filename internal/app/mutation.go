@@ -35,14 +35,15 @@ type MutationOptions struct {
 
 // MutationPlan is the --dry-run output. Mutates is always false.
 type MutationPlan struct {
-	Op      string                   `json:"op"`
-	Path    string                   `json:"path"`
-	Table   string                   `json:"table"`
-	Fields  map[string]storage.Value `json:"fields,omitempty"`
-	IfMatch string                   `json:"if_match,omitempty"`
-	DryRun  bool                     `json:"dry_run"`
-	Mutates bool                     `json:"mutates"`
-	Warning string                   `json:"warning"`
+	Op          string                   `json:"op"`
+	Path        string                   `json:"path"`
+	Table       string                   `json:"table"`
+	Destination string                   `json:"destination,omitempty"`
+	Fields      map[string]storage.Value `json:"fields,omitempty"`
+	IfMatch     string                   `json:"if_match,omitempty"`
+	DryRun      bool                     `json:"dry_run"`
+	Mutates     bool                     `json:"mutates"`
+	Warning     string                   `json:"warning"`
 }
 
 // Touch inserts a row, returning the effective row with its ETag (FR-06a).
@@ -91,7 +92,7 @@ func (s Service) Touch(ctx context.Context, p vfs.Path, data []byte, opts Mutati
 		return MutationPlan{Op: "touch", Path: tablePath, Table: p.Table, Fields: fields, DryRun: true, Warning: dryRunWarning}, nil
 	}
 
-	return s.execute(ctx, st, "touch", p, m, opts, storage.Mutation{Kind: "touch", Table: p.Table, Fields: fields})
+	return s.execute(ctx, st, "touch", p, nil, m, opts, storage.Mutation{Kind: "touch", Table: p.Table, Fields: fields})
 }
 
 // Write updates authorized fields of one row or field, with a mandatory ETag
@@ -168,7 +169,7 @@ func (s Service) Write(ctx context.Context, p vfs.Path, data []byte, ifMatch str
 		s.auditFailure("write", p, m, opts, err)
 		return nil, err
 	}
-	return s.execute(ctx, st, "write", p, m, opts, storage.Mutation{Kind: "write", Table: p.Table, Key: key, Fields: fields, IfMatch: ifMatch})
+	return s.execute(ctx, st, "write", p, nil, m, opts, storage.Mutation{Kind: "write", Table: p.Table, Key: key, Fields: fields, IfMatch: ifMatch})
 }
 
 // mutationAllowed enforces the two independent gates from DESIGN §9 and D-17:
@@ -185,10 +186,12 @@ func mutationAllowed(m state.Mount, op, path string) error {
 }
 
 // execute runs one mutation with the audit sequence from DESIGN §11: durable
-// attempt, mutation, result. A failure after commit is reported as an unknown
-// outcome so the caller reconciles by reading, never by retrying blindly.
-func (s Service) execute(ctx context.Context, st *sqlite.Store, op string, p vfs.Path, m state.Mount, opts MutationOptions, mutation storage.Mutation) (any, error) {
-	if err := s.auditOutcome(op, p, m, opts, "attempt", ""); err != nil {
+// attempt, mutation, result. dest is the row a cp or mv creates, so every
+// outcome names it; it is nil for the other operations. A failure after commit
+// is reported as an unknown outcome so the caller reconciles by reading, never
+// by retrying blindly.
+func (s Service) execute(ctx context.Context, st *sqlite.Store, op string, p vfs.Path, dest *vfs.Path, m state.Mount, opts MutationOptions, mutation storage.Mutation) (any, error) {
+	if err := s.auditRecord(op, p, dest, m, opts, "attempt", ""); err != nil {
 		return nil, fmt.Errorf("record audit attempt for %s: %w", op, err)
 	}
 
@@ -203,10 +206,10 @@ func (s Service) execute(ctx context.Context, st *sqlite.Store, op string, p vfs
 		if errors.Is(writeErr, storage.ErrCommitUnknown) {
 			status = "unknown"
 		}
-		_ = s.auditOutcome(op, p, m, opts, status, auditCode(writeErr))
+		_ = s.auditRecord(op, p, dest, m, opts, status, auditCode(writeErr))
 		return nil, writeErr
 	}
-	if err := s.auditOutcome(op, p, m, opts, "ok", "OK"); err != nil {
+	if err := s.auditRecord(op, p, dest, m, opts, "ok", "OK"); err != nil {
 		return nil, fmt.Errorf("%w: mutation committed but its final audit record failed: %v; read the database instead of retrying", storage.ErrCommitUnknown, err)
 	}
 	path, err := pathString(vfs.Path{Kind: vfs.KindRow, Alias: p.Alias, Table: p.Table, Key: row.Key})
@@ -487,6 +490,13 @@ func (s Service) auditFailure(op string, p vfs.Path, m state.Mount, opts Mutatio
 // auditOutcome appends one redacted record. An empty AuditDir means audit is
 // not wired (unit tests); production always sets it.
 func (s Service) auditOutcome(op string, p vfs.Path, m state.Mount, opts MutationOptions, status, code string) error {
+	return s.auditRecord(op, p, nil, m, opts, status, code)
+}
+
+// auditRecord is auditOutcome plus the destination a cp or mv creates: for cp
+// the affected resource is the row that appears, so the log names it too. The
+// destination is redacted with the same rule as the source (D-9).
+func (s Service) auditRecord(op string, p vfs.Path, dest *vfs.Path, m state.Mount, opts MutationOptions, status, code string) error {
 	if s.AuditDir == "" {
 		return nil
 	}
@@ -495,7 +505,7 @@ func (s Service) auditOutcome(op string, p vfs.Path, m state.Mount, opts Mutatio
 	if actor == "" {
 		actor = "anonymous"
 	}
-	return audit.Append(s.AuditDir, audit.Record{
+	rec := audit.Record{
 		RequestID: opts.RequestID,
 		Actor:     actor,
 		Operation: op,
@@ -504,7 +514,12 @@ func (s Service) auditOutcome(op string, p vfs.Path, m state.Mount, opts Mutatio
 		Resource:  resource,
 		Status:    status,
 		Code:      code,
-	})
+	}
+	if dest != nil {
+		destResource, _ := auditResource(m, *dest)
+		rec.Dest = destResource
+	}
+	return audit.Append(s.AuditDir, rec)
 }
 
 // auditResource redacts a row identity the actor may not read: the full path is
