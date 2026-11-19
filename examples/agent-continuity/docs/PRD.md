@@ -357,7 +357,7 @@ Las líneas base son `UNKNOWN` porque ACM aún no se implementa. Los objetivos s
 
 | Pregunta o decisión | Por qué importa | Responsable | Condición de respuesta |
 |---|---|---|---|
-| ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | antes de ejecutar ACM-05 |
+| ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | **Decidido (PO, 2026-11-19): se mantiene el objetivo de M-ACM-03 (2 000 tokens)** y se ajusta la convención de recuperación de la skill al conjunto mínimo medido (7 729 B ≈ 1 933 tokens, protocolos.md §3.6); los objetivos de M-ACM-02 y M-ACM-05 quedan como están en §7 |
 | ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | decisión de ACM-04 |
 | ¿Qué tope de cuerpo y qué retención se aplican a filas obsoletas? | afecta contexto y crecimiento | ingeniería y PO | **Decidido (PO, 2026-11-19): sin purga automática.** Las filas obsoletas permanecen con su `status`; la purga física es mantenimiento manual autorizado. Los topes de cuerpo son convención de la skill |
 | ¿Las preferencias son solo del proyecto o también por agente? | cambia el modelo de datos y la recuperación | PO | **Decidido (PO, 2026-11-19): solo por proyecto.** La identidad del agente queda como procedencia, no como clave de recuperación |

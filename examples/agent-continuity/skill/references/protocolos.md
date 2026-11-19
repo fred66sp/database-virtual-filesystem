@@ -93,6 +93,14 @@ actividad.
 5. Si el término no aparece, reformula con las palabras que usaría quien
    capturó; no pidas la tabla completa. Un fallo de recuperación es una señal
    sobre la captura, no una invitación a exportar.
+6. Contexto de reanudación con presupuesto cerrado: cuatro `find` filtrados y
+   nada más — checkpoint activo de la sesión previa, observaciones de esa
+   sesión, decisiones activas y preferencias activas — sin listado completo de
+   sesiones y sin repetir con `cat` lo que un `find` ya devolvió. La evidencia
+   de ACM-05 midió este conjunto en 7 729 bytes ≈ 1 933 tokens estimados,
+   dentro del objetivo de M-ACM-03; añadir el listado de sesiones o el detalle
+   redundante lo superó (2 503 con el `cat`). El detalle se pide después, solo
+   del elemento que vayas a usar.
 
 ## 4. Actualización y consolidación
 
