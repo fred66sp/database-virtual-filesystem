@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "4a16d553-abe9-4a83-9d00-42f7a390689b",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/db-ai/arquitectura.json",
+  "output": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/db-ai/arquitectura.html",
+  "specification": {
+    "sha256": "63841913d846e4f0c047e9755f7c5bcbedd834e138d140f30d7176c4f1739fc5",
+    "bytes": 7836
+  },
+  "artifact": {
+    "sha256": "27231fc2136ed0a4ff8f283858ec294ce72d83b288e3db1bd166bb4da6e180b5",
+    "bytes": 844931
+  }
+}

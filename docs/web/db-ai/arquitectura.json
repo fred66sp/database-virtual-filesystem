@@ -1,0 +1,378 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arquitectura de db-ai",
+    "subtitle": "Una CLI traduce rutas de sistema de archivos a tablas, filas y campos de SQLite: sin SQL, con catálogo, política, ETag y una salida JSON única.",
+    "locale": "es",
+    "output": "docs/web/db-ai/arquitectura.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "persona",
+      "type": "external",
+      "label": "Persona",
+      "sublabel": "fija el encargo",
+      "icon": "person",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "agente",
+      "type": "external",
+      "label": "Agente anfitrión",
+      "sublabel": "descubre y opera",
+      "pos": [
+        220,
+        40
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "skill",
+      "type": "frontend",
+      "label": "SKILL.md",
+      "sublabel": "cinco fases y guardas",
+      "pos": [
+        60,
+        150
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "ref-comandos",
+      "type": "database",
+      "label": "comandos.md",
+      "sublabel": "formas, salida y cursores",
+      "pos": [
+        60,
+        250
+      ],
+      "size": [
+        230,
+        52
+      ]
+    },
+    {
+      "id": "ref-escritura",
+      "type": "database",
+      "label": "escritura.md",
+      "sublabel": "ETag, dry-run y batch",
+      "pos": [
+        60,
+        318
+      ],
+      "size": [
+        230,
+        52
+      ]
+    },
+    {
+      "id": "ref-errores",
+      "type": "database",
+      "label": "errores.md",
+      "sublabel": "códigos y recuperación",
+      "pos": [
+        60,
+        386
+      ],
+      "size": [
+        230,
+        52
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI db-ai",
+      "sublabel": "rutas, no SQL",
+      "pos": [
+        390,
+        150
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "envelope",
+      "type": "database",
+      "label": "Salida JSON",
+      "sublabel": "version 1 · ok · data · meta",
+      "pos": [
+        390,
+        250
+      ],
+      "size": [
+        240,
+        56
+      ]
+    },
+    {
+      "id": "config",
+      "type": "database",
+      "label": "config.json",
+      "sublabel": "alias · modo · política allow",
+      "pos": [
+        390,
+        330
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite montado",
+      "sublabel": "tablas, filas y campos",
+      "pos": [
+        710,
+        150
+      ],
+      "size": [
+        220,
+        64
+      ]
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "Política de acceso",
+      "sublabel": "ro por defecto · allow por prefijo",
+      "pos": [
+        710,
+        250
+      ],
+      "size": [
+        220,
+        64
+      ]
+    },
+    {
+      "id": "etag",
+      "type": "security",
+      "label": "ETag y transacción",
+      "sublabel": "contenido · if-match · rollback",
+      "pos": [
+        710,
+        340
+      ],
+      "size": [
+        220,
+        64
+      ]
+    },
+    {
+      "id": "audit",
+      "type": "security",
+      "label": "Auditoría JSONL",
+      "sublabel": "intento · resultado · redacción",
+      "pos": [
+        980,
+        250
+      ],
+      "size": [
+        210,
+        64
+      ]
+    },
+    {
+      "id": "fuente",
+      "type": "external",
+      "label": "Contratos fuente",
+      "sublabel": "PRD · DESIGN §3 y §8-9",
+      "pos": [
+        980,
+        40
+      ],
+      "size": [
+        210,
+        64
+      ]
+    },
+    {
+      "id": "docs",
+      "type": "external",
+      "label": "Página de docs",
+      "sublabel": "index · flujo · arquitectura",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        210,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Paquete de conocimiento",
+      "wraps": [
+        "skill",
+        "ref-comandos",
+        "ref-escritura",
+        "ref-errores"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Superficie de ejecución",
+      "wraps": [
+        "cli",
+        "envelope",
+        "config",
+        "sqlite",
+        "policy",
+        "etag",
+        "audit"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "encarga",
+      "from": "persona",
+      "to": "agente",
+      "label": "encarga",
+      "variant": "emphasis"
+    },
+    {
+      "id": "carga",
+      "from": "agente",
+      "to": "skill",
+      "label": "carga",
+      "variant": "emphasis"
+    },
+    {
+      "id": "consulta",
+      "from": "skill",
+      "to": "ref-comandos",
+      "label": "consulta JiT",
+      "variant": "dashed"
+    },
+    {
+      "id": "prepara",
+      "from": "skill",
+      "to": "ref-escritura",
+      "label": "antes de mutar",
+      "variant": "dashed"
+    },
+    {
+      "id": "recupera",
+      "from": "skill",
+      "to": "ref-errores",
+      "label": "si falla",
+      "variant": "dashed"
+    },
+    {
+      "id": "invoca",
+      "from": "skill",
+      "to": "cli",
+      "label": "invoca",
+      "variant": "emphasis"
+    },
+    {
+      "id": "traduce",
+      "from": "cli",
+      "to": "sqlite",
+      "label": "traduce rutas",
+      "variant": "emphasis"
+    },
+    {
+      "id": "devuelve",
+      "from": "cli",
+      "to": "envelope",
+      "label": "un JSON",
+      "variant": "emphasis"
+    },
+    {
+      "id": "registra",
+      "from": "config",
+      "to": "cli",
+      "label": "registra montajes",
+      "variant": "dashed"
+    },
+    {
+      "id": "autoriza",
+      "from": "policy",
+      "to": "cli",
+      "label": "autoriza",
+      "variant": "security"
+    },
+    {
+      "id": "precondiciona",
+      "from": "etag",
+      "to": "cli",
+      "label": "precondiciona",
+      "variant": "security"
+    },
+    {
+      "id": "registra-intento",
+      "from": "cli",
+      "to": "audit",
+      "label": "audita",
+      "variant": "security"
+    },
+    {
+      "id": "funda",
+      "from": "fuente",
+      "to": "skill",
+      "label": "fundamenta",
+      "variant": "dashed"
+    },
+    {
+      "id": "documenta",
+      "from": "skill",
+      "to": "docs",
+      "label": "documenta",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "El paquete de conocimiento",
+      "items": [
+        "SKILL.md fija el orden: descubrir, leer, escribir, verificar y cerrar; las referencias se abren solo cuando la operación lo pide",
+        "comandos.md concentra formas exactas, salida y cursores; escritura.md, ETag, dry-run y batch; errores.md, códigos y recuperación",
+        "No hay scripts: db-ai ya es una CLI determinista y la skill no duplica su lógica"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "La superficie de ejecución",
+      "items": [
+        "La CLI resuelve la ruta contra el catálogo y enlaza valores como parámetros; nunca interpola segmentos de ruta como SQL",
+        "El montaje ro es el defecto; rw exige política explícita y la escritura sigue siendo deny-by-default por operación y prefijo",
+        "El ETag representa contenido, no una versión monotónica: no detecta ABA y obliga a releer tras cada cambio"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fronteras y evidencia",
+      "items": [
+        "La auditoría registra intento y resultado fuera de la base de usuario; no guarda valores, SQL crudo ni credenciales",
+        "La autorización local no es una frontera de seguridad frente a quien tenga acceso directo al fichero o a la configuración",
+        "Quedan fuera SQL libre, DDL, migraciones, FUSE, LLM y PostgreSQL en el MVP"
+      ]
+    }
+  ]
+}

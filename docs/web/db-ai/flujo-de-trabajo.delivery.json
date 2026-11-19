@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d5e85867-f6b0-427b-b983-bf8f3d8f9253",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/db-ai/flujo-de-trabajo.json",
+  "output": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/db-ai/flujo-de-trabajo.html",
+  "specification": {
+    "sha256": "1092a85c9b35a5af386dc14ece590102a11c084646c82a09ed6685d0e83764ce",
+    "bytes": 7237
+  },
+  "artifact": {
+    "sha256": "7c0933d73f9acddaaf57bfe7080566d5210231df5eff96d2699f65f8a194491b",
+    "bytes": 834369
+  }
+}

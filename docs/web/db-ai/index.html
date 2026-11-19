@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light" data-skill="db-ai">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="db-ai: acceso a bases SQLite mediante rutas y comandos, sin SQL libre. Montajes, catálogo, lectura, escritura con ETag, lotes, política deny-by-default y errores E_*.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cellipse cx='16' cy='10' rx='8' ry='3.2' fill='none' stroke='%23ffffff' stroke-width='2.2'/%3E%3Cpath d='M8 10v12c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V10' fill='none' stroke='%23ffffff' stroke-width='2.2'/%3E%3Cpath d='M8 16c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2' fill='none' stroke='%23ffffff' stroke-width='2.2'/%3E%3C/svg%3E">
+<title>db-ai · Bases de datos como sistema de archivos</title>
+<script>
+(function () {
+  var skill = document.documentElement.getAttribute("data-skill") || "db-ai";
+  try {
+    var p = JSON.parse(localStorage.getItem(skill + ":prefs") || "{}");
+    var t = p.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", t);
+  } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
+})();
+</script>
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/microlighter/microlighter-docs.css">
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header class="topbar">
+  <a class="brand" href="#top">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" role="presentation"><defs>
+          <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#115e59"></stop>
+            <stop offset="1" stop-color="#0f766e"></stop>
+          </linearGradient>
+        </defs><rect width="32" height="32" fill="url(#brand-grad)"></rect><ellipse cx="16" cy="10" rx="8" ry="3.2" fill="none" stroke="#ffffff" stroke-width="2.2"/><path d="M8 10v12c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V10" fill="none" stroke="#ffffff" stroke-width="2.2"/><path d="M8 16c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2" fill="none" stroke="#ffffff" stroke-width="2.2"/></svg></span>
+    <span class="brand-name">db-ai<small>Datos sin SQL</small></span>
+  </a>
+  <span class="topbar-spacer"></span>
+  <a class="icon-btn catalog-btn" href="../index.html" aria-label="Volver al índice" title="Volver al índice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H19"></path></svg>
+    <span>Índice</span>
+  </a>
+  <button class="icon-btn" id="theme-toggle" type="button" aria-label="Cambiar a tema oscuro">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+    <span>Tema</span>
+  </button>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <span class="pill"><span class="dot" aria-hidden="true"></span>CLI agent-first · rutas en vez de SQL · permiso y ETag antes de tocar datos</span>
+    <h1>Bases de datos que se recorren <span class="grad">como un sistema de archivos</span></h1>
+    <p class="lead"><code>db-ai</code> da acceso a una base SQLite existente con la semántica de un sistema de archivos: alias, tablas, filas y campos como rutas. La IA es consumidora, no una dependencia: no hay lenguaje natural interpretado ni SQL libre.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#que-hace">Qué hace</a>
+      <a class="btn btn-ghost" href="#operacion">Cómo se opera</a>
+      <a class="btn btn-ghost" href="#garantias">Qué garantiza</a>
+      <a class="btn btn-ghost" href="#diagramas">Los diagramas</a>
+      <a class="btn btn-ghost" href="../acm/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"></path></svg>
+        Ver ACM
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <nav class="toc" aria-label="Índice de la página">
+    <h2>En esta página</h2>
+    <a href="#que-hace">1. Qué hace</a>
+    <a href="#cuando">2. Cuándo se usa</a>
+    <a href="#operacion">3. Cómo se opera</a>
+    <a href="#garantias">4. Qué garantiza</a>
+    <a href="#limites">5. Límites del MVP</a>
+    <a href="#preguntas">6. Preguntas cortas</a>
+    <a href="#diagramas">7. Los diagramas</a>
+    <a href="#verificacion">8. Verificación</a>
+    <div class="toc-extra"><a href="../index.html">Volver al índice</a></div>
+  </nav>
+
+  <main id="contenido">
+    <section id="que-hace" class="section">
+      <div class="section-head"><span class="section-num">1</span><h2 class="title">Qué hace</h2></div>
+      <p class="sub">La base se navega como un árbol: un alias montado, sus tablas, sus claves y sus campos. El agente no escribe SQL y la base no se modifica al montarla.</p>
+
+      <div class="code"><pre><code class="language-text">/
+└── work/                     # montaje SQLite
+    ├── tasks/                # tabla
+    │   └── TK-001/           # registro identificado por clave
+    │       ├── title         # columna
+    │       └── status
+    └── users/</code></pre></div>
+
+      <p>Las rutas son identificadores virtuales, no ficheros por registro. La forma completa es <code>/alias/tabla/clave/campo</code>; una clave textual con <code>/</code> se codifica como <code>a%2Fb</code>. Los nombres y las claves se codifican de forma reversible y los segmentos nunca se interpolan como SQL.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Situación</th><th>Qué ofrece db-ai</th></tr></thead>
+          <tbody>
+            <tr><td>Hay que saber qué bases y tablas existen.</td><td><code>mounts</code>, <code>ls</code> y <code>tree</code> descubren; <code>describe</code> y <code>stat</code> confirman columnas, claves, tipos y capacidades.</td></tr>
+            <tr><td>Hay que leer una fila o un campo concreto.</td><td><code>cat</code> sobre la ruta, sin traer la tabla completa ni inventar columnas.</td></tr>
+            <tr><td>Hay que filtrar o buscar texto.</td><td><code>find</code> con operadores acotados y <code>grep</code> como subcadena literal, con límites, orden determinista y cursores.</td></tr>
+            <tr><td>Hay que sacar muchas filas.</td><td><code>export</code> a JSON o JSONL por stdout, con los mismos filtros y límites que <code>find</code>.</td></tr>
+            <tr><td>Hay que insertar, actualizar, copiar, renombrar o borrar.</td><td><code>touch</code>, <code>write</code>, <code>cp</code>, <code>mv</code> y <code>rm</code>, con modo <code>rw</code>, política explícita, dry-run y ETag según la operación.</td></tr>
+            <tr><td>Hay que aplicar varias mutaciones juntas.</td><td><code>batch</code> de hasta 100 operaciones sobre un solo montaje y una sola transacción, con rollback completo ante fallo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p><strong>Lo que no hace.</strong> No crea tablas, no migra esquemas, no administra el motor y no acepta SQL libre, ORMs ni lenguaje natural. Tampoco implementa un servidor, FUSE ni PostgreSQL en el MVP.</p>
+      </div>
+    </section>
+
+    <section id="cuando" class="section">
+      <div class="section-head"><span class="section-num">2</span><h2 class="title">Cuándo se usa</h2></div>
+      <p class="sub">Encaja cuando la base ya existe y la pregunta se puede acotar por estructura, clave o filtro. Queda fuera cuando el trabajo es cambiar el esquema o el motor.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Se usa para</th><th>No se usa para</th></tr></thead>
+          <tbody>
+            <tr><td>Explorar una base SQLite existente sin conocer su dominio.</td><td>Crear tablas, índices o columnas; migrar o alterar el esquema.</td></tr>
+            <tr><td>Leer y buscar filas y campos con rutas y filtros documentados.</td><td>Escribir SQL directo, usar un ORM o ejecutar consultas arbitrarias.</td></tr>
+            <tr><td>Exportar una selección acotada para otra herramienta.</td><td>Administrar el motor, hacer copias de seguridad o gestionar usuarios.</td></tr>
+            <tr><td>Modificar registros autorizados con precondición y verificación.</td><td>PostgreSQL u otros motores fuera del MVP.</td></tr>
+            <tr><td>Automatizar lecturas y mutaciones con JSON versionado y códigos de salida.</td><td>Interpretar lenguaje natural o generar SQL a partir de una petición.</td></tr>
+            <tr><td>Servir de infraestructura a una aplicación de referencia como <a href="../acm/">ACM</a>.</td><td>Sustituir una CLI de dominio que ya aplica reglas de negocio.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="operacion" class="section">
+      <div class="section-head"><span class="section-num">3</span><h2 class="title">Cómo se opera</h2></div>
+      <p class="sub">Cuatro pasos y una comprobación final. La profundidad se ajusta a la pregunta; las guardas de escritura no se saltan.</p>
+
+      <div class="flow">
+        <div class="flow-step"><code>paso 1</code><strong>Descubrir</strong><p><code>mounts</code> dice qué alias y modo hay; <code>ls</code> y <code>tree</code> acotan la estructura; <code>describe</code> y <code>stat</code> resuelven tabla, columnas y ruta.</p></div>
+        <div class="flow-step"><code>paso 2</code><strong>Leer</strong><p><code>cat</code> para una fila o un campo; <code>find</code> con <code>--where</code>; <code>grep</code> para texto literal; <code>export</code> solo si hace falta volumen.</p></div>
+        <div class="flow-step"><code>paso 3</code><strong>Escribir</strong><p>Montaje <code>rw</code> y política explícita. Dry-run primero; <code>--if-match</code> con el ETag vigente; <code>--apply</code> solo en <code>mv</code> y <code>rm</code>.</p></div>
+        <div class="flow-step"><code>paso 4</code><strong>Verificar</strong><p>Releer la fila, comprobar el ETag nuevo y reconciliar <code>E_COMMIT_UNKNOWN</code> leyendo la base, nunca reintentando a ciegas.</p></div>
+      </div>
+
+      <h3>Descubrir y leer</h3>
+      <div class="code"><pre><code class="language-bash">db-ai mount ./tasks.db /work
+db-ai ls /work --json
+db-ai describe /work/tasks --json
+db-ai cat /work/tasks/TK-001 --json
+db-ai find /work/tasks --where 'status=pending' --limit 20</code></pre></div>
+
+      <p>El montaje es <code>ro</code> por defecto y no crea el fichero si falta. Los ejemplos son la intención normativa del contrato funcional; la sintaxis completa y las flags viven en <a href="../../DESIGN.md">DESIGN.md</a> §3.</p>
+
+      <h3>Escribir con precondición</h3>
+      <div class="code"><pre><code class="language-bash">ETAG=$(db-ai cat /work/tasks/TK-001 | sed -n 's/.*"etag":"\([^"]*\)".*/\1/p')
+
+db-ai write /work/tasks/TK-001 \
+  --data '{"status":{"kind":"text","data":"done"}}' \
+  --if-match "$ETAG"</code></pre></div>
+
+      <p>El ETag se lee de la fila, no se inventa. <code>write</code> actualiza campos autorizados y no cambia la clave primaria ni las columnas generadas. Un registro recibe un mapa parcial, no un reemplazo implícito.</p>
+
+      <h3>Agrupar en un lote</h3>
+      <div class="code"><pre><code class="language-bash">db-ai batch --data '[{"op":"write","path":"/work/tasks/TK-001/status","if_match":"sha256:&lt;ETag de cat&gt;","data":{"kind":"text","data":"done"}}]'</code></pre></div>
+
+      <p>El lote admite hasta 100 operaciones, un solo montaje y una sola transacción. El <code>if_match</code> describe el estado previo al lote: no se encadena sobre una fila creada o modificada en el mismo lote. Si una operación falla, se revierte todo.</p>
+
+      <div class="qa"><h3>No se conoce la clave, pero sí una condición</h3><p><code>find --where 'status=pending'</code>. Varios filtros se combinan con AND; los operadores son <code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>is-null</code> y <code>not-null</code>.</p></div>
+      <div class="qa"><h3>La tabla no tiene PK estable</h3><p>Solo se ofrece la primera página de <code>find</code>, <code>grep</code> o <code>export</code>. <code>ls</code> y <code>cat</code> devuelven <code>E_UNSUPPORTED</code> y no se insiste con cursores.</p></div>
+      <div class="qa"><h3>El montaje está en <code>ro</code> o la política deniega</h3><p>La escritura se detiene con <code>E_DENIED</code>. <code>rw</code> no concede escritura por sí solo y <code>--apply</code> no es un permiso.</p></div>
+    </section>
+
+    <section id="garantias" class="section">
+      <div class="section-head"><span class="section-num">4</span><h2 class="title">Qué garantiza</h2></div>
+      <p class="sub">Cada operación devuelve un único objeto JSON versionado. El código de error es la fuente de verdad para el agente; los códigos de salida agrupan.</p>
+
+      <div class="code"><pre><code class="language-json">{"version":1,"ok":true,"data":{"path":"/work/tasks/TK-001","fields":{"id":{"kind":"text","data":"TK-001"},"status":{"kind":"text","data":"pending"}},"etag":"sha256:..."},"meta":{"truncated":false,"next_cursor":"...","request_id":"..."}}</code></pre></div>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Garantía</th><th>Qué significa en la práctica</th></tr></thead>
+          <tbody>
+            <tr><td>Contrato JSON único</td><td>Un objeto por invocación en <code>stdout</code>, incluso ante error; logs y diagnósticos a <code>stderr</code>. <code>--json</code> se acepta sin efecto porque JSON es el formato por defecto y único del MVP.</td></tr>
+            <tr><td>ETag</td><td>SHA-256 de la representación canónica de tabla, clave, <code>schema_version</code> y valores tipados. Representa contenido, no una versión monotónica: no detecta ABA y obliga a releer tras cada cambio.</td></tr>
+            <tr><td>Deny-by-default</td><td>El montaje <code>ro</code> es el defecto; <code>rw</code> exige política explícita. La política se compara por segmentos de ruta, nunca por prefijos de cadena.</td></tr>
+            <tr><td>Transacción</td><td>Las mutaciones verifican catálogo, permisos, existencia y ETag dentro de <code>BEGIN IMMEDIATE</code>; se emite éxito solo después del commit.</td></tr>
+            <tr><td>Auditoría</td><td>JSONL local fuera de la base de usuario: <code>request_id</code>, actor declarado, operación, recurso redactado, estado y código. No guarda valores, SQL crudo ni credenciales.</td></tr>
+            <tr><td>Límites</td><td>1000 registros por página (<code>--limit</code> mayor devuelve <code>E_LIMIT</code>), 16 MiB de salida, profundidad de <code>tree</code> 4 y <code>--timeout</code> entre 1 y 60 s con defecto 5 s.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Salida</th><th>Código</th><th>Significado</th></tr></thead>
+          <tbody>
+            <tr><td><code>0</code></td><td>OK</td><td>Éxito.</td></tr>
+            <tr><td><code>2</code></td><td><code>E_USAGE</code></td><td>Sintaxis o valor inválido; también un cursor falsificado.</td></tr>
+            <tr><td><code>3</code></td><td><code>E_NOT_FOUND</code> / <code>E_STALE_SESSION</code></td><td>Recurso ausente o contexto de sesión inválido.</td></tr>
+            <tr><td><code>4</code></td><td><code>E_DENIED</code></td><td>Política o modo de acceso.</td></tr>
+            <tr><td><code>5</code></td><td><code>E_CONFLICT</code></td><td>ETag o destino en conflicto.</td></tr>
+            <tr><td><code>6</code></td><td><code>E_CONSTRAINT</code></td><td>Restricción del motor.</td></tr>
+            <tr><td><code>7</code></td><td><code>E_BUSY</code> / <code>E_TIMEOUT</code></td><td>Contención o plazo agotado.</td></tr>
+            <tr><td><code>8</code></td><td><code>E_UNSUPPORTED</code> / <code>E_LIMIT</code></td><td>Capacidad no demostrada o presupuesto excedido.</td></tr>
+            <tr><td><code>9</code></td><td><code>E_INTERNAL</code></td><td>Fallo interno.</td></tr>
+            <tr><td><code>10</code></td><td><code>E_COMMIT_UNKNOWN</code></td><td>Resultado de commit incierto; se reconcilia leyendo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p><strong>La autorización local no es una frontera de seguridad.</strong> Quien tenga acceso directo al fichero o a la configuración puede saltarse la política. El actor declarado por CLI es informativo, no una identidad autenticada.</p>
+      </div>
+    </section>
+
+    <section id="limites" class="section">
+      <div class="section-head"><span class="section-num">5</span><h2 class="title">Límites del MVP</h2></div>
+      <p class="sub">La universalidad es visión, no requisito de esta versión. El alcance aprobado rechaza los esquemas que no puede demostrar.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Fuera del MVP</th><th>Motivo</th></tr></thead>
+          <tbody>
+            <tr><td>FUSE, servidor, daemon o shell interactivo.</td><td>La CLI, stdin y stdout bastan para un agente; el shell queda como futuro.</td></tr>
+            <tr><td>LLM, embeddings, lenguaje natural o generación de SQL.</td><td>La IA es consumidora; el producto no depende de un proveedor ni interpreta peticiones.</td></tr>
+            <tr><td>SQL libre, DDL, migraciones y creación de tablas.</td><td>Evita modificaciones implícitas y mantiene el esquema como territorio del operador.</td></tr>
+            <tr><td>Vistas fuera del alcance; tablas internas y virtuales excluidas de mutación.</td><td>Las vistas no se exponen en el MVP; las tablas virtuales no se modifican. La lectura se anuncia con las capacidades que el catálogo puede demostrar.</td></tr>
+            <tr><td>PostgreSQL y otros adaptadores.</td><td>El MVP es SQLite existente; los adaptadores son trabajo futuro.</td></tr>
+            <tr><td>Identidad por <code>rowid</code>, BLOB, REAL o NULL en la clave.</td><td>Sin PK estable y navegable no hay rutas seguras; esas tablas se limitan a consulta tabular o se deniegan.</td></tr>
+            <tr><td>Borrado recursivo, copia de grafos y movimientos entre tablas.</td><td>Los efectos indirectos se rechazan de forma conservadora.</td></tr>
+            <tr><td>Atomicidad entre bases o entre la base y el log de auditoría.</td><td>Un <code>batch</code> es de un solo montaje; la auditoría no promete atomicidad con SQLite.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p>El montaje no altera el esquema y <code>umount</code> elimina la referencia, no el fichero. Las operaciones que requieren leer la fila completa se deniegan si el actor no tiene acceso completo a esa fila.</p>
+      </div>
+    </section>
+
+    <section id="preguntas" class="section">
+      <div class="section-head"><span class="section-num">6</span><h2 class="title">Preguntas cortas</h2></div>
+      <p class="sub">Lo que se pregunta antes de usar la CLI por primera vez.</p>
+
+      <div class="qa"><h3>¿Hay que saber SQL?</h3><p>No. Se opera con rutas y comandos. <code>db-ai</code> no acepta SQL libre y no lo genera.</p></div>
+      <div class="qa"><h3>¿Un montaje <code>rw</code> permite escribir?</h3><p>No. <code>rw</code> exige una política explícita; la escritura sigue siendo deny-by-default por operación y prefijo de ruta.</p></div>
+      <div class="qa"><h3>¿Qué garantiza el ETag?</h3><p>Que el contenido de la fila no cambió desde que se leyó. No es una versión monotónica y no detecta ABA; tras cada cambio hay que releer.</p></div>
+      <div class="qa"><h3>¿Se puede encadenar un lote sobre una fila creada en el mismo lote?</h3><p>No. El <code>if_match</code> describe el estado previo al lote; encadenar devuelve conflicto y revierte todo. El trabajo se divide en dos invocaciones.</p></div>
+      <div class="qa"><h3>¿Sustituye a la CLI del dominio?</h3><p>No. Si el dominio ya tiene una CLI con reglas de negocio, se prefiere esa. <code>db-ai</code> es el acceso genérico por semántica de filesystem.</p></div>
+      <div class="qa"><h3>¿Escribe ficheros al exportar?</h3><p>No. <code>export</code> escribe en <code>stdout</code>; el agente captura solo lo que necesita.</p></div>
+    </section>
+
+    <section id="diagramas" class="section">
+      <div class="section-head"><span class="section-num">7</span><h2 class="title">Los diagramas</h2><span class="chip-repo">de este repositorio</span></div>
+      <p class="sub">Dos vistas del mismo contrato: el recorrido de una operación y las piezas que la sostienen.</p>
+
+      <div class="grid cols-2">
+        <a class="card card-link" href="flujo-de-trabajo.html">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6z"></path><path d="M10 8.5h2a2 2 0 0 1 2 2v5"></path></svg></div>
+          <h3>Flujo de trabajo</h3>
+          <p>Descubrir con el mínimo contexto, leer, escribir con permiso y ETag, agrupar en un lote y verificar antes de cerrar.</p>
+          <span class="go">Abrir el diagrama →</span>
+        </a>
+        <a class="card card-link" href="arquitectura.html">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></div>
+          <h3>Arquitectura</h3>
+          <p>El contrato, sus referencias, la CLI que traduce rutas, el catálogo y el fichero de configuración, la base montada y las guardas de permisos y ETag.</p>
+          <span class="go">Abrir el diagrama →</span>
+        </a>
+      </div>
+
+      <p>Cada diagrama es un artefacto de Archify: se abre como página suelta, con su especificación <code>.json</code> y su recibo <code>.delivery.json</code> junto al HTML. Se vuelve con el botón atrás o con el índice de esta página.</p>
+
+      <div class="note">
+        <p><strong>ACM es la aplicación de referencia.</strong> Compone SQLite, <code>db-ai</code> y una skill de comportamiento para guardar memoria de continuidad. Su sitio explica las tres piezas y el ciclo de reanudación: <a href="../acm/">abrir ACM</a>.</p>
+      </div>
+    </section>
+
+    <section id="verificacion" class="section">
+      <div class="section-head"><span class="section-num">8</span><h2 class="title">Verificación</h2></div>
+      <p class="sub">El contrato se contrasta con pruebas automatizadas y con el entorno objetivo; una demostración visual no declara un requisito terminado.</p>
+
+      <div class="code"><pre><code class="language-bash">go build ./cmd/db-ai
+go test ./...
+go test -race ./...
+go vet ./...</code></pre></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Resultado</th><th>Lectura</th></tr></thead>
+          <tbody>
+            <tr><td><code>0</code></td><td>Build, pruebas y vet sin fallos en el entorno ejecutado.</td></tr>
+            <tr><td><code>distinto de 0</code></td><td>Algún fallo; se corrige antes de cerrar. No se declara verificado lo que no se ejecutó.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p>Esta página resume los contratos v0.2.0 de <a href="../../PRD.md">PRD.md</a> y <a href="../../DESIGN.md">DESIGN.md</a>. Si una afirmación de aquí contradice a esos documentos, mandan ellos.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="footer">
+  <span><code>docs/web/db-ai/</code> · db-ai v0.2.0 · documento en español</span>
+  <span><a href="../index.html">Índice</a> · <a href="#top">Volver arriba</a> · <a href="../../PRD.md">PRD</a> · <a href="../../DESIGN.md">DESIGN</a> · <a href="flujo-de-trabajo.html">Flujo</a> · <a href="arquitectura.html">Arquitectura</a></span>
+  <span>Página estática: no envía datos ni carga recursos externos · <code>docs/web/db-ai/index.html</code></span>
+</footer>
+
+<a class="to-top" id="to-top" href="#top" aria-label="Volver arriba" title="Volver arriba">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>
+</a>
+
+<script src="../assets/site.js"></script>
+<script src="../assets/microlighter/microlighter-docs.js"></script>
+</body>
+</html>

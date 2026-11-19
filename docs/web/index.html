@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light" data-skill="db-ai">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Documentación estática de db-ai y Agent Continuity Memory (ACM): qué hacen, cómo se operan, qué garantizan y sus diagramas de arquitectura y flujo de trabajo.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Crect x='7' y='8' width='18' height='4' rx='2' fill='%23ffffff'/%3E%3Crect x='7' y='14' width='14' height='4' rx='2' fill='%23ffffff' opacity='.85'/%3E%3Crect x='7' y='20' width='10' height='4' rx='2' fill='%23ffffff' opacity='.7'/%3E%3C/svg%3E">
+<title>db-ai y ACM · documentación</title>
+<script>
+(function () {
+  try {
+    var p = JSON.parse(localStorage.getItem("db-ai:prefs") || "{}");
+    var t = p.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", t);
+  } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
+})();
+</script>
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/microlighter/microlighter-docs.css">
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header class="topbar">
+  <a class="brand" href="#top">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" role="presentation"><defs>
+          <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#115e59"></stop>
+            <stop offset="1" stop-color="#0f766e"></stop>
+          </linearGradient>
+        </defs><rect width="32" height="32" fill="url(#brand-grad)"></rect><rect x="7" y="8" width="18" height="4" rx="2" fill="#ffffff"/><rect x="7" y="14" width="14" height="4" rx="2" fill="#ffffff" opacity=".85"/><rect x="7" y="20" width="10" height="4" rx="2" fill="#ffffff" opacity=".7"/></svg></span>
+    <span class="brand-name">db-ai + ACM<small>Documentación</small></span>
+  </a>
+  <span class="topbar-spacer"></span>
+  <button class="icon-btn" id="theme-toggle" type="button" aria-label="Cambiar a tema oscuro">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+    <span>Tema</span>
+  </button>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <span class="pill"><span class="dot" aria-hidden="true"></span>documentación estática · db-ai v0.2.0 · ACM v0.1.0</span>
+    <h1>Recorrer los datos <span class="grad">y recordar el trabajo</span></h1>
+    <p class="lead">Dos temas que se complementan: <code>db-ai</code> convierte una base SQLite existente en un árbol de rutas que un agente puede explorar y modificar; <strong>ACM</strong> compone esa infraestructura con una skill para conservar la continuidad de un proyecto entre sesiones.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="db-ai/">Explorar db-ai</a>
+      <a class="btn btn-ghost" href="acm/">Explorar ACM</a>
+      <a class="btn btn-ghost" href="#temas">Los dos temas</a>
+      <a class="btn btn-ghost" href="#fuentes">Fuentes</a>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <nav class="toc" aria-label="Índice de la página">
+    <h2>En esta página</h2>
+    <a href="#temas">1. Los dos temas</a>
+    <a href="#sitio">2. Cómo se lee este sitio</a>
+    <a href="#fuentes">3. Fuentes canónicas</a>
+  </nav>
+
+  <main id="contenido">
+    <section id="temas" class="section">
+      <div class="section-head"><span class="section-num">1</span><h2 class="title">Los dos temas</h2></div>
+      <p class="sub">Cada tema tiene una página de entrada y dos diagramas: arquitectura y flujo de trabajo.</p>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"></ellipse><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"></path><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"></path></svg></div>
+          <h3>db-ai · datos sin SQL</h3>
+          <p>Una CLI agent-first que da acceso a bases SQLite mediante rutas: alias, tablas, filas y campos. Sin SQL libre, con permisos, ETag, transacciones y una única salida JSON.</p>
+          <ul>
+            <li><a href="db-ai/">Qué hace y cómo se opera</a></li>
+            <li><a href="db-ai/arquitectura.html">Arquitectura de db-ai</a></li>
+            <li><a href="db-ai/flujo-de-trabajo.html">Flujo de trabajo</a></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4-8 4-8-4z"></path><path d="M4 12l8 4 8-4M4 17l8 4 8-4"></path></svg></div>
+          <h3>ACM · memoria de continuidad</h3>
+          <p>Una aplicación de referencia construida sobre db-ai: sesiones, hallazgos, decisiones, checkpoints y preferencias en SQLite por proyecto, bajo el alias <code>mem</code>. Sin motor propio, MCP ni LLM.</p>
+          <ul>
+            <li><a href="acm/">Qué es y cómo se inicializa</a></li>
+            <li><a href="acm/arquitectura.html">Arquitectura de ACM</a></li>
+            <li><a href="acm/flujo-de-trabajo.html">Ciclo de continuidad</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="sitio" class="section">
+      <div class="section-head"><span class="section-num">2</span><h2 class="title">Cómo se lee este sitio</h2></div>
+      <p class="sub">Páginas estáticas, sin servidor ni recursos externos. Los diagramas son artefactos verificados, no imágenes sueltas.</p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Estático y autónomo</h3>
+          <p>HTML, CSS y JavaScript locales. No se descargan tipografías, librerías ni fuentes externas; si Inter o JetBrains Mono no están instaladas, el navegador usa su pila del sistema.</p>
+        </div>
+        <div class="card">
+          <h3>Diagramas con recibo</h3>
+          <p>Cada <code>arquitectura.html</code> y <code>flujo-de-trabajo.html</code> se genera desde su <code>.json</code> con Archify. El <code>.delivery.json</code> acompaña al HTML y registra que la especificación y el artefacto son los mismos.</p>
+        </div>
+        <div class="card">
+          <h3>Tema claro y oscuro</h3>
+          <p>El tema se resuelve antes de pintar con <code>data-theme</code> en <code>&lt;html&gt;</code> y se conserva en <code>localStorage</code>. La preferencia del sistema es el valor inicial.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="fuentes" class="section">
+      <div class="section-head"><span class="section-num">3</span><h2 class="title">Fuentes canónicas</h2></div>
+      <p class="sub">Estas páginas resumen los contratos vivos del repositorio. Si hay contradicción, mandan los artefactos enlazados.</p>
+
+      <div class="table-wrap wrap-cells">
+        <table>
+          <thead><tr><th>Documento</th><th>Qué contiene</th></tr></thead>
+          <tbody>
+            <tr><td><a href="../PRD.md">docs/PRD.md</a></td><td>Contrato funcional de db-ai: requisitos FR-01 a FR-16, NFR, modelo de recursos y política de producto.</td></tr>
+            <tr><td><a href="../DESIGN.md">docs/DESIGN.md</a></td><td>Contrato técnico de db-ai: CLI, rutas, catálogo, consultas, mutaciones, política, ETag, errores y auditoría.</td></tr>
+            <tr><td><a href="../../README.md">README.md</a></td><td>Estado del proyecto y ejemplo mínimo; delega las formas exactas en DESIGN.</td></tr>
+            <tr><td><a href="../../examples/agent-continuity/README.md">examples/agent-continuity/README.md</a></td><td>ACM: inicialización, operación con db-ai, escenarios, pruebas, garantías y límites.</td></tr>
+            <tr><td><a href="../../examples/agent-continuity/docs/PRD.md">ACM · PRD</a> y <a href="../../examples/agent-continuity/docs/DESIGN.md">ACM · DESIGN</a></td><td>Requisitos, esquema DDL, algoritmo de <code>content_hash</code>, estados, política y decisiones de ACM.</td></tr>
+            <tr><td><a href="../../examples/agent-continuity/skill/SKILL.md">Skill agent-continuity</a></td><td>Los siete protocolos de comportamiento y las reglas transversales que aplica el agente.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p><strong>Alcance de esta documentación.</strong> No sustituye a los contratos ni añade requisitos. Describe lo que está aprobado o implementado; lo no verificado se declara en cada página.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="footer">
+  <span><code>docs/web/</code> · documentación de db-ai y ACM · español</span>
+  <span><a href="db-ai/">db-ai</a> · <a href="acm/">ACM</a> · <a href="#top">Volver arriba</a></span>
+  <span>Página estática: no envía datos ni carga recursos externos · <code>docs/web/index.html</code></span>
+</footer>
+
+<a class="to-top" id="to-top" href="#top" aria-label="Volver arriba" title="Volver arriba">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>
+</a>
+
+<script src="assets/site.js"></script>
+<script src="assets/microlighter/microlighter-docs.js"></script>
+</body>
+</html>
