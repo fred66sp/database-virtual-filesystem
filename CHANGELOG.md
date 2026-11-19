@@ -5,7 +5,7 @@ Todos los cambios notables de este proyecto se documentan en este fichero.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Sin publicar]
+## [0.3.0] - 2026-11-19
 
 ### Añadido
 

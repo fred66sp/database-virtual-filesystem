@@ -2,7 +2,7 @@ package cli
 
 // version is the functional version of the binary. It changes with the
 // contract, not with the build.
-const version = "0.2.0"
+const version = "0.3.0"
 
 // Build metadata, injected by the release build and left at its defaults
 // otherwise:
