@@ -80,6 +80,8 @@ func CodedError(err error) *Error {
 	switch {
 	case errors.Is(err, vfs.ErrInvalidPath), errors.Is(err, storage.ErrInvalid), errors.Is(err, state.ErrInvalid):
 		return &Error{Code: CodeUsage, Message: err.Error(), Err: err}
+	case errors.Is(err, state.ErrStaleSession):
+		return &Error{Code: CodeStaleSession, Message: err.Error(), Err: err}
 	case errors.Is(err, storage.ErrNotFound), errors.Is(err, os.ErrNotExist):
 		return &Error{Code: CodeNotFound, Message: notFoundMessage(err), Err: err}
 	case errors.Is(err, storage.ErrDenied):

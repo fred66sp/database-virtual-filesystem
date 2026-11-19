@@ -14,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"dbvfs/internal/cursor"
 	"dbvfs/internal/storage"
 )
 
@@ -32,6 +33,10 @@ INSERT INTO items (id, note, payload, big, ratio, label) VALUES (2, 'two', NULL,
 INSERT INTO items (id, note, payload, big, ratio, label) VALUES (3, 'three', NULL, 43, 3.5, NULL);
 CREATE TABLE fragile (id INTEGER PRIMARY KEY, value REAL);
 INSERT INTO fragile VALUES (1, 9e999);
+CREATE TABLE plain (a TEXT, b INTEGER);
+INSERT INTO plain VALUES ('z', 2), ('a', 1);
+CREATE TABLE pairs (a TEXT, b INTEGER, v TEXT, PRIMARY KEY (a, b));
+INSERT INTO pairs VALUES ('a', 1, 'x'), ('a', 2, 'y'), ('b', 1, 'z');
 `
 
 // openFixture creates a database with the test schema and returns its path plus
@@ -171,6 +176,165 @@ func TestListOrdersByPrimaryKeyAndHonoursLimit(t *testing.T) {
 	if got := rows[1].Key[0].Data; got != "2" {
 		t.Errorf("second key = %q, want 2", got)
 	}
+}
+
+func TestListFiltersSearchAndKeyset(t *testing.T) {
+	path, _ := openFixture(t)
+	st := openStore(t, path)
+	ctx := context.Background()
+
+	atLeastTwo := []storage.Filter{{Column: "id", Op: ">=", Value: storage.Value{Kind: "integer", Data: "2"}}}
+	var first []storage.Row
+	err := st.Read(ctx, func(rd storage.Reader) error {
+		var err error
+		first, _, err = rd.List(ctx, storage.Query{Table: "items", Filters: atLeastTwo, Limit: 1})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("List filtered: %v", err)
+	}
+	if len(first) != 1 || first[0].Key[0].Data != "2" {
+		t.Fatalf("first filtered page = %+v, want row 2", first)
+	}
+
+	position, err := cursor.EncodeKey(first[0].Key)
+	if err != nil {
+		t.Fatalf("EncodeKey: %v", err)
+	}
+	var second []storage.Row
+	err = st.Read(ctx, func(rd storage.Reader) error {
+		var err error
+		second, _, err = rd.List(ctx, storage.Query{Table: "items", Filters: atLeastTwo, Limit: 1, Cursor: position})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("List with cursor: %v", err)
+	}
+	if len(second) != 1 || second[0].Key[0].Data != "3" {
+		t.Fatalf("second filtered page = %+v, want row 3", second)
+	}
+
+	var found []storage.Row
+	err = st.Read(ctx, func(rd storage.Reader) error {
+		var err error
+		found, _, err = rd.List(ctx, storage.Query{Table: "items", Search: &storage.Search{Text: "tw", Columns: []string{"note"}}})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("List search: %v", err)
+	}
+	if len(found) != 1 || found[0].Key[0].Data != "2" {
+		t.Errorf("search tw = %+v, want row 2", found)
+	}
+
+	var none []storage.Row
+	err = st.Read(ctx, func(rd storage.Reader) error {
+		var err error
+		none, _, err = rd.List(ctx, storage.Query{Table: "items", Filters: []storage.Filter{
+			{Column: "note", Op: "=", Value: storage.Value{Kind: "text", Data: "x' OR 1=1 --"}},
+		}})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("List injection attempt: %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("injection attempt returned %d rows, want 0", len(none))
+	}
+
+	if _, _, err := listWith(st, ctx, storage.Query{Table: "items", Filters: []storage.Filter{{Column: "bogus", Op: "="}}}); !errors.Is(err, storage.ErrInvalid) {
+		t.Errorf("unknown filter column error = %v, want storage.ErrInvalid", err)
+	}
+}
+
+func TestListDescendingKeyset(t *testing.T) {
+	path, _ := openFixture(t)
+	st := openStore(t, path)
+	ctx := context.Background()
+	desc := []storage.OrderSpec{{Column: "id", Desc: true}}
+
+	first, _, err := listWith(st, ctx, storage.Query{Table: "items", Order: desc, Limit: 1})
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(first) != 1 || first[0].Key[0].Data != "3" {
+		t.Fatalf("first descending page = %+v, want row 3", first)
+	}
+
+	last := first[0]
+	for i, want := range []string{"2", "1"} {
+		position, err := cursor.EncodeKey(last.Key)
+		if err != nil {
+			t.Fatalf("EncodeKey: %v", err)
+		}
+		next, _, err := listWith(st, ctx, storage.Query{Table: "items", Order: desc, Limit: 1, Cursor: position})
+		if err != nil {
+			t.Fatalf("page %d: %v", i+2, err)
+		}
+		if len(next) != 1 || next[0].Key[0].Data != want {
+			t.Fatalf("page %d = %+v, want row %s", i+2, next, want)
+		}
+		last = next[0]
+	}
+}
+
+func TestListCompositeKeyKeyset(t *testing.T) {
+	path, _ := openFixture(t)
+	st := openStore(t, path)
+	ctx := context.Background()
+
+	first, _, err := listWith(st, ctx, storage.Query{Table: "pairs", Limit: 1})
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(first) != 1 || first[0].Key[0].Data != "a" || first[0].Key[1].Data != "1" {
+		t.Fatalf("first pair = %+v, want (a,1)", first)
+	}
+	position, err := cursor.EncodeKey(first[0].Key)
+	if err != nil {
+		t.Fatalf("EncodeKey: %v", err)
+	}
+	second, _, err := listWith(st, ctx, storage.Query{Table: "pairs", Limit: 1, Cursor: position})
+	if err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if len(second) != 1 || second[0].Key[0].Data != "a" || second[0].Key[1].Data != "2" {
+		t.Fatalf("second pair = %+v, want (a,2)", second)
+	}
+	position, err = cursor.EncodeKey(second[0].Key)
+	if err != nil {
+		t.Fatalf("EncodeKey: %v", err)
+	}
+	third, _, err := listWith(st, ctx, storage.Query{Table: "pairs", Limit: 1, Cursor: position})
+	if err != nil {
+		t.Fatalf("third page: %v", err)
+	}
+	if len(third) != 1 || third[0].Key[0].Data != "b" || third[0].Key[1].Data != "1" {
+		t.Fatalf("third pair = %+v, want (b,1)", third)
+	}
+}
+
+func TestListNonNavigableOrdersEveryColumn(t *testing.T) {
+	path, _ := openFixture(t)
+	st := openStore(t, path)
+	rows, _, err := listWith(st, context.Background(), storage.Query{Table: "plain", Limit: 10})
+	if err != nil {
+		t.Fatalf("List(plain): %v", err)
+	}
+	if len(rows) != 2 || valueOf(rows[0], "a").Data != "a" || valueOf(rows[1], "a").Data != "z" {
+		t.Errorf("plain rows = %+v, want a then z by every column", rows)
+	}
+}
+
+func listWith(st *Store, ctx context.Context, q storage.Query) ([]storage.Row, string, error) {
+	var rows []storage.Row
+	var next string
+	err := st.Read(ctx, func(rd storage.Reader) error {
+		var err error
+		rows, next, err = rd.List(ctx, q)
+		return err
+	})
+	return rows, next, err
 }
 
 func TestCatalogRevalidatesAfterSchemaChange(t *testing.T) {

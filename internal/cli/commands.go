@@ -32,7 +32,7 @@ var (
 	flagLimit   = flagSpec{"limit", "N", flagString, "maximum records per page, 1-1000"}
 	flagCursor  = flagSpec{"cursor", "TOKEN", flagString, "pagination cursor from meta.next_cursor"}
 	flagDepth   = flagSpec{"depth", "N", flagString, "tree depth, 1-4"}
-	flagWhere   = flagSpec{"where", "EXPR", flagRepeat, "filter as COLUMN=OPVALUE, repeatable (AND)"}
+	flagWhere   = flagSpec{"where", "EXPR", flagRepeat, "filter COLUMN=OPVALUE (ops = != < <= > >= is-null not-null), repeatable (AND)"}
 	flagData    = flagSpec{"data", "JSON|-", flagString, "JSON payload, or - to read stdin once"}
 	flagIfMatch = flagSpec{"if-match", "ETAG", flagString, "ETag precondition for the change"}
 	flagFormat  = flagSpec{"format", "json|jsonl", flagString, "output format, json or jsonl (default json)"}

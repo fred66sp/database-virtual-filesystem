@@ -32,7 +32,7 @@ CREATE TABLE tasks (
 INSERT INTO tasks VALUES (1, 'uno ñ / 100% ~ ~e', NULL, x'00ff', 9223372036854775807, 1.25, 1);
 INSERT INTO tasks VALUES (2, 'dos', 'note', NULL, 42, 2.5, 1);
 CREATE TABLE nopk (x TEXT);
-INSERT INTO nopk VALUES ('a');
+INSERT INTO nopk VALUES ('a'), ('b'), ('c');
 CREATE TABLE tags (
 	name TEXT NOT NULL,
 	kind TEXT NOT NULL,
@@ -107,8 +107,9 @@ type envelopeJSON struct {
 	OK      bool            `json:"ok"`
 	Data    json.RawMessage `json:"data"`
 	Meta    struct {
-		Truncated bool   `json:"truncated"`
-		RequestID string `json:"request_id"`
+		Truncated  bool   `json:"truncated"`
+		NextCursor string `json:"next_cursor"`
+		RequestID  string `json:"request_id"`
 	} `json:"meta"`
 	Error *struct {
 		Code    string `json:"code"`

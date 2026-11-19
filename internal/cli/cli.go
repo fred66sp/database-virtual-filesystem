@@ -36,40 +36,90 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stdout, stderr, err)
 	}
-	if err := writeJSON(stdout, successEnvelope(res.data, meta{Truncated: res.truncated, RequestID: id})); err != nil {
+	m := meta{Truncated: res.truncated, NextCursor: res.nextCursor, RequestID: id}
+	if res.jsonl != nil {
+		if err := writeJSONL(stdout, res.jsonl, m); err != nil {
+			return fail(stdout, stderr, err)
+		}
+		return 0
+	}
+	if err := writeJSON(stdout, successEnvelope(res.data, m)); err != nil {
 		return fail(stdout, stderr, err)
 	}
 	return 0
 }
 
-// result is what a handler returns to the envelope: data plus the pagination
-// flag meta.truncated.
+// result is what a handler returns to the renderer: data plus pagination
+// metadata. A non-nil jsonl slice selects JSONL output (export --format jsonl).
 type result struct {
-	data      any
-	truncated bool
+	data       any
+	truncated  bool
+	nextCursor string
+	jsonl      []app.RowData
 }
 
 // execute is the dispatcher. Commands implemented by a later work package keep
 // answering with the standard error envelope.
 func execute(inv *invocation) (result, error) {
 	switch inv.spec.name {
-	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat":
+	case "cd", "pwd":
+		return executeSession(inv)
+	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat",
+		"find", "grep", "export":
 		return executeRead(inv)
 	}
 	return result{}, codedError(CodeUnsupported, "%s is not implemented until %s", inv.spec.name, inv.spec.wp)
 }
 
-// executeRead wires the read side: config directory, operation deadline and
-// the application service. Mutations and sessions arrive in later packages.
-func executeRead(inv *invocation) (result, error) {
+// newService wires the config directory, the sessions directory and the
+// operation deadline into the application layer.
+func newService(inv *invocation) (app.Service, error) {
 	dir, err := state.Dir()
 	if err != nil {
+		return app.Service{}, err
+	}
+	sessions, err := state.SessionsDir()
+	if err != nil {
+		return app.Service{}, err
+	}
+	return app.Service{ConfigDir: dir, StateDir: sessions, Timeout: inv.timeout}, nil
+}
+
+// resolvePath turns a deferred relative path into a VFS path using the
+// session's working directory. The application owns session files, so the CLI
+// never guesses a cwd.
+func resolvePath(svc *app.Service, inv *invocation) error {
+	if !inv.pathRelative && !inv.pathFromCwd {
+		return nil
+	}
+	p, err := svc.Resolve(inv.session, inv.pathRaw)
+	if err != nil {
+		return err
+	}
+	inv.path = &p
+	return nil
+}
+
+func effectiveLimit(limit int) int {
+	if limit <= 0 {
+		return maxLimit
+	}
+	return limit
+}
+
+// executeRead wires the read side: config directory, operation deadline and
+// the application service.
+func executeRead(inv *invocation) (result, error) {
+	svc, err := newService(inv)
+	if err != nil {
+		return result{}, err
+	}
+	if err := resolvePath(&svc, inv); err != nil {
 		return result{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), inv.timeout)
 	defer cancel()
 
-	svc := app.Service{ConfigDir: dir, Timeout: inv.timeout}
 	switch inv.spec.name {
 	case "mount":
 		info, err := svc.Mount(inv.args[0], inv.alias, inv.mode)
@@ -85,20 +135,12 @@ func executeRead(inv *invocation) (result, error) {
 		return result{data: mountsData{Mounts: mounts}}, nil
 	case "ls":
 		if inv.cursor != "" {
-			return result{}, codedError(CodeUnsupported, "pagination cursors are not implemented until WP-03")
+			return result{}, codedError(CodeUnsupported, "ls does not support pagination cursors")
 		}
-		limit := inv.limit
-		if limit == 0 {
-			limit = maxLimit
-		}
-		data, truncated, err := svc.LS(ctx, *inv.path, limit)
+		data, truncated, err := svc.LS(ctx, *inv.path, effectiveLimit(inv.limit))
 		return result{data: data, truncated: truncated}, err
 	case "tree":
-		limit := inv.limit
-		if limit == 0 {
-			limit = maxLimit
-		}
-		data, truncated, err := svc.Tree(ctx, *inv.path, inv.depth, limit)
+		data, truncated, err := svc.Tree(ctx, *inv.path, inv.depth, effectiveLimit(inv.limit))
 		return result{data: data, truncated: truncated}, err
 	case "stat":
 		data, err := svc.Stat(ctx, *inv.path)
@@ -109,6 +151,48 @@ func executeRead(inv *invocation) (result, error) {
 	case "cat":
 		data, err := svc.Cat(ctx, *inv.path)
 		return result{data: data}, err
+	case "find":
+		data, truncated, next, err := svc.Find(ctx, *inv.path, inv.where, effectiveLimit(inv.limit), inv.cursor)
+		return result{data: data, truncated: truncated, nextCursor: next}, err
+	case "grep":
+		data, truncated, next, err := svc.Grep(ctx, *inv.path, inv.args[1], effectiveLimit(inv.limit), inv.cursor)
+		return result{data: data, truncated: truncated, nextCursor: next}, err
+	case "export":
+		rows, truncated, next, err := svc.Export(ctx, *inv.path, inv.where, effectiveLimit(inv.limit), inv.cursor)
+		if err != nil {
+			return result{}, err
+		}
+		if inv.format == "jsonl" {
+			return result{jsonl: rows, truncated: truncated, nextCursor: next}, nil
+		}
+		path, err := inv.path.Canonical()
+		if err != nil {
+			return result{}, err
+		}
+		return result{data: app.FindData{Path: path, Rows: rows}, truncated: truncated, nextCursor: next}, nil
+	}
+	return result{}, unreachableError(inv.spec.name)
+}
+
+// executeSession handles the two commands that read or write session state.
+func executeSession(inv *invocation) (result, error) {
+	svc, err := newService(inv)
+	if err != nil {
+		return result{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), inv.timeout)
+	defer cancel()
+
+	switch inv.spec.name {
+	case "cd":
+		if err := resolvePath(&svc, inv); err != nil {
+			return result{}, err
+		}
+		info, err := svc.CD(ctx, inv.session, *inv.path)
+		return result{data: info}, err
+	case "pwd":
+		info, err := svc.PWD(ctx, inv.session)
+		return result{data: info}, err
 	}
 	return result{}, unreachableError(inv.spec.name)
 }

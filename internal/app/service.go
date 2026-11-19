@@ -19,9 +19,11 @@ import (
 )
 
 // Service is the command implementation shared by the CLI layer. ConfigDir is
-// the db-ai config directory, injected so tests never touch the real one.
+// the db-ai config directory and StateDir the sessions directory; both are
+// injected so tests never touch the real ones.
 type Service struct {
 	ConfigDir string
+	StateDir  string
 	Timeout   time.Duration
 }
 
@@ -115,15 +117,24 @@ func (s Service) timeout() time.Duration {
 	return s.Timeout
 }
 
-// open resolves an alias to its registered file and opens a store for it.
-func (s Service) open(alias string) (*sqlite.Store, error) {
+// mount resolves an alias to its registry entry.
+func (s Service) mount(alias string) (state.Mount, error) {
 	cfg, err := state.Load(s.ConfigDir)
 	if err != nil {
-		return nil, err
+		return state.Mount{}, err
 	}
 	m, ok := cfg.Mounts[alias]
 	if !ok {
-		return nil, fmt.Errorf("%w: mount %q is not registered", storage.ErrNotFound, alias)
+		return state.Mount{}, fmt.Errorf("%w: mount %q is not registered", storage.ErrNotFound, alias)
+	}
+	return m, nil
+}
+
+// open resolves an alias to its registered file and opens a store for it.
+func (s Service) open(alias string) (*sqlite.Store, error) {
+	m, err := s.mount(alias)
+	if err != nil {
+		return nil, err
 	}
 	if err := checkMountFile(m.File); err != nil {
 		return nil, err

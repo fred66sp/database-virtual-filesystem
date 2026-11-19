@@ -1,14 +1,20 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"io"
+
+	"dbvfs/internal/app"
 )
 
 // apiVersion is the version of the JSON envelope from DESIGN §10.
 const apiVersion = 1
+
+// maxOutputBytes caps one invocation's stdout (NFR-05: 16 MiB).
+const maxOutputBytes = 16 << 20
 
 // successResponse and errorResponse are the two documented envelope shapes.
 // They are separate types so neither can leak the other's fields: an error
@@ -71,7 +77,42 @@ func writeJSON(w io.Writer, v any) error {
 	if err != nil {
 		return err
 	}
+	if len(b)+1 > maxOutputBytes {
+		return limitError()
+	}
 	b = append(b, '\n')
 	_, err = w.Write(b)
 	return err
+}
+
+// writeJSONL emits one row object per line (FR-16). A page that is truncated
+// ends with one trailer line carrying meta.next_cursor, so a stream consumer
+// can continue without changing the row shape.
+func writeJSONL(w io.Writer, rows []app.RowData, m meta) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, row := range rows {
+		if err := enc.Encode(row); err != nil {
+			return err
+		}
+		if buf.Len() > maxOutputBytes {
+			return limitError()
+		}
+	}
+	if m.Truncated || m.NextCursor != "" {
+		if err := enc.Encode(struct {
+			Meta meta `json:"meta"`
+		}{m}); err != nil {
+			return err
+		}
+	}
+	if buf.Len() > maxOutputBytes {
+		return limitError()
+	}
+	_, err := w.Write(buf.Bytes())
+	return err
+}
+
+func limitError() error {
+	return codedError(CodeLimit, "output exceeds the %d MiB limit", maxOutputBytes>>20)
 }
