@@ -1,0 +1,16 @@
+VARIANT mattn driver=sqlite3 workdir=/tmp/wp01-mattn-630495099
+OK build: go=go1.27.3 CGO_ENABLED=1 linux/amd64 driver_dep=github.com/mattn/go-sqlite3@v1.14.53 deps=1
+OK engine: sqlite_version=3.54.1 journal_mode=delete default_busy_timeout=5000 compile_options=43 [MAX_VARIABLE_NUMBER=32766, THREADSAFE=1]
+OK busy_dsn: dsn="file:/tmp/wp01-mattn-630495099/busy_dsn.db?_busy_timeout=500" busy_timeout_readback=500 second_writer_failed_after=502ms err="database is locked"
+OK busy_dsn_alt: form="_pragma=busy_timeout() (modernc form)" dsn="file:/tmp/wp01-mattn-630495099/busy_alt.db?_pragma=busy_timeout(700)" busy_timeout=5000 (expected 700)
+OK busy_pragma_exec: PRAGMA busy_timeout via Exec readback=300, second_writer_failed_after=302ms err="database is locked"
+OK dsn_pragma_support: dsn="file:/tmp/wp01-mattn-630495099/pragma_fk.db?_pragma=foreign_keys(1)" PRAGMA_foreign_keys_readback=0 (_pragma not applied)
+OK fts5: CREATE VIRTUAL TABLE ... USING fts5 failed: "no such module: fts5"
+OK dsn_readonly_mode: bare_name_mode_ro=NOT_ENFORCED(write_succeeded); file_uri_mode_ro=ENFORCED("attempt to write a readonly database")
+OK busy_wal_mode: journal_mode=wal; reader ok during writer; second_writer_failed_after=402ms err="database is locked"
+OK begin_immediate_exec: BEGIN IMMEDIATE accepted on pinned sql.Conn; uncommitted row hidden from second conn; visible after COMMIT
+OK begin_tx_serializable_default_dsn: BeginTx(LevelSerializable) acquires_write_lock_at_BEGIN=no -> deferred BEGIN; probe BEGIN IMMEDIATE succeeded in 0s
+OK begin_tx_dsn_txlock_immediate: dsn="file:/tmp/wp01-mattn-630495099/tx_txlock.db?_txlock=immediate" BeginTx(default) acquires_write_lock_at_BEGIN=yes -> real BEGIN IMMEDIATE; probe BEGIN IMMEDIATE got BUSY after 0s
+OK tx_mixing_manual_and_pooled: after db.Exec("BEGIN IMMEDIATE") pool InUse=0 (conn released mid-tx); pooled Exec rejected="database is locked" (loud, no silent split); manual row rolled back ok; tx.Exec("BEGIN") -> "cannot start a transaction within a transaction"; MaxOpenConns(1) BEGIN/INSERT/COMMIT works (committed=true, serializes all access); safe pattern: one pinned sql.Conn per session for manual BEGIN/COMMIT, or sql.Tx exclusively
+OK interrupt_ctx_timeout: recursive CTE cancelled after 201ms err="context deadline exceeded"; same conn usable (SELECT 1 ok); no leftover lock (second conn BEGIN IMMEDIATE ok)
+OK journal_mode_wal: PRAGMA journal_mode=WAL returned "wal" (busy_timeout still 5000)

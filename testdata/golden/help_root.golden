@@ -1,0 +1,77 @@
+db-ai — SQLite databases as a virtual filesystem
+
+Usage:
+  db-ai <command> [flags] [arguments]
+  db-ai --help
+
+Commands:
+  mount FILE /ALIAS [--mode ro|rw]
+      register a SQLite file under an alias
+  umount /ALIAS
+      remove a mount; never deletes the file
+  mounts
+      list registered mounts
+  ls [PATH] [--limit N] [--cursor TOKEN]
+      list children of a path
+  tree [PATH] [--depth N] [--limit N]
+      list descendants up to a depth
+  stat PATH
+      show what a path is
+  describe PATH
+      describe a table, its columns and capabilities
+  cat PATH
+      read a row or a field as JSON
+  cd PATH
+      change the session working directory
+  pwd
+      print the session working directory
+  find PATH [--where EXPR]... [--limit N] [--cursor TOKEN]
+      filter rows with --where expressions
+  grep PATH TEXT [--limit N] [--cursor TOKEN]
+      search a literal substring in text columns
+  touch PATH --data JSON|-
+      insert a row, returning its key
+  write ROW_OR_FIELD --data JSON|- --if-match ETAG
+      update a field or a row with an ETag precondition
+  cp ROW DEST_ROW --if-match ETAG
+      copy a row within its table
+  mv ROW DEST_ROW --if-match ETAG --apply
+      rename a simple primary key
+  rm ROW --if-match ETAG --apply
+      delete one row
+  batch --data JSON|-
+      apply several mutations in one transaction
+  export PATH [--where EXPR]... [--format json|jsonl] [--limit N] [--cursor TOKEN]
+      export rows to stdout as JSON or JSONL
+
+Global flags:
+  --json           accepted for compatibility; JSON is the only output format
+  --session ID     session ID that resolves relative paths
+  --timeout N      operation timeout in seconds, 1-60 (default 5)
+  --actor NAME     informational actor label
+  --request-id ID  client request ID; generated when absent
+  --help           show help (-h also works)
+
+Output:
+  Exactly one JSON object per invocation on stdout:
+    success: {"version":1,"ok":true,"data":...,"meta":{"truncated":false,"request_id":"..."}}
+    failure: {"version":1,"ok":false,"error":{"code":"E_...","message":"..."}}
+  Diagnostics go to stderr.
+
+Exit codes:
+  0    OK
+  2    E_USAGE
+  3    E_NOT_FOUND or E_STALE_SESSION
+  4    E_DENIED
+  5    E_CONFLICT
+  6    E_CONSTRAINT
+  7    E_BUSY or E_TIMEOUT
+  8    E_UNSUPPORTED or E_LIMIT
+  9    E_INTERNAL
+  10   E_COMMIT_UNKNOWN
+
+Examples:
+  db-ai mount ./tasks.db /work
+  db-ai ls /work
+  db-ai cat /work/tasks/TK-001
+  db-ai find /work/tasks --where 'status=pending' --limit 20
