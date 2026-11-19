@@ -12,6 +12,9 @@
 - [Política Git y contribución](CONTRIBUTING.md)
 - [Registro de cambios](CHANGELOG.md)
 - [Mapa del repositorio para agentes](AGENTS.md)
+- [Decisiones de arquitectura (ADR)](docs/decisions/README.md) — exportación generada del tablero
+- [Revisión de los contratos iniciales](docs/reviews/2026-11-19-prd-design-review.md)
+- [Validación del driver SQLite (WP-01)](docs/reviews/2026-11-19-driver-sqlite-validation.md)
 
 ## Sistema de trabajo
 

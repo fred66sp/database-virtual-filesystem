@@ -122,23 +122,11 @@ func (s Service) Write(ctx context.Context, p vfs.Path, data []byte, ifMatch str
 	}
 	// Every field needs its own write grant; a grant on a sibling field is not
 	// a segment prefix of this one (FR-13).
-	names := make([]string, 0, len(fields))
-	for name := range fields {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		target := path
-		if p.Kind == vfs.KindRow {
-			target, err = pathString(vfs.Path{Kind: vfs.KindField, Alias: p.Alias, Table: p.Table, Key: p.Key, Field: name})
-			if err != nil {
-				return nil, err
-			}
-		}
-		if err := mutationAllowed(m, "write", target); err != nil {
+	if err := authorizeFieldWrites(m, p, fields); err != nil {
+		if errors.Is(err, storage.ErrDenied) {
 			_ = s.auditOutcome("write", p, m, opts, "denied", "E_DENIED")
-			return nil, err
 		}
+		return nil, err
 	}
 	rowPath, err := pathString(vfs.Path{Kind: vfs.KindRow, Alias: p.Alias, Table: p.Table, Key: p.Key})
 	if err != nil {
@@ -181,6 +169,34 @@ func mutationAllowed(m state.Mount, op, path string) error {
 	}
 	if !writeOpAllowed(m, op, path) {
 		return policyDenied(op, lastSegment(path), path)
+	}
+	return nil
+}
+
+// authorizeFieldWrites requires one write grant per field (FR-13): a grant on a
+// sibling field is not a segment prefix of this one. Callers keep their own
+// audit record for the denial.
+func authorizeFieldWrites(m state.Mount, p vfs.Path, fields map[string]storage.Value) error {
+	base, err := pathString(p)
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		target := base
+		if p.Kind == vfs.KindRow {
+			target, err = pathString(vfs.Path{Kind: vfs.KindField, Alias: p.Alias, Table: p.Table, Key: p.Key, Field: name})
+			if err != nil {
+				return err
+			}
+		}
+		if err := mutationAllowed(m, "write", target); err != nil {
+			return err
+		}
 	}
 	return nil
 }
