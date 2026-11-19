@@ -33,24 +33,51 @@ Objetivo: saber dónde quedó el proyecto y qué reglas rigen antes de actuar.
    `source`, `goal`, `status='open'`, `started_at`, `created_at` y `updated_at`.
    La recuperación de solo lectura puede ocurrir antes; la primera escritura de
    conocimiento, no.
-3. Preferencias: `find` en `/mem/preferences` por `status='active'`, con límite
-   corto. Aplica cada valor o declara el conflicto con la instrucción de la
-   persona.
-4. Checkpoint: `find` en `/mem/checkpoints` por `status='active'`; el UUIDv7
-   mayor es el más reciente. Lee objetivo, estado, próximos pasos, ficheros y
-   preguntas abiertas. Si no hay checkpoint, el historial de la sesión anterior
-   es el siguiente recurso.
-5. Decisiones: `find` en `/mem/observations` por `kind='decision'` y
-   `status='active'`, con límite corto; acota por `topic_key` cuando ya conoces el
-   tema.
+3. Preferencias aplicables: pide por `pref_key` conocido —una invocación por
+   clave que rija la tarea, como máximo tres en la reanudación— con
+   `status='active'` y límite 2. Si aún no conoces las claves, pide una página
+   mínima (`status='active'`, límite 3), elige las aplicables y, si `truncated`
+   avisa de recorte, pide por clave las que falten. No pidas todas las activas.
+   Con más de tres claves, pide ahora las que rijan la acción inmediata y el
+   resto después. Aplica cada valor o declara el conflicto con la instrucción de
+   la persona.
+4. Checkpoint vigente. Acota el alcance antes de buscar: `find` ordena por PK
+   ascendente y no garantiza el más reciente en la primera página (C-ACM-03).
+   - Sesión conocida (handoff o reanudación de una sesión concreta): `find` en
+     `/mem/checkpoints` por `session_id` y `status='active'`, con límite corto
+     (5). El UUIDv7 mayor de esa página es el vigente; dos activas para la misma
+     sesión son una anomalía y van al protocolo 7.
+   - Continuidad del proyecto sin sesión conocida: `find` en `/mem/sessions` por
+     `started_at` dentro de una ventana acotada (por defecto, los últimos 14
+     días) y límite corto (50). Si la respuesta trae `truncated`, la página no
+     contiene la más reciente: acorta el corte y repite; no uses el cursor para
+     recorrer páginas. Con la ventana entera en memoria, ordena localmente por
+     UUIDv7 mayor (recencia) y toma la primera sesión con checkpoint activo.
+     Busca después su checkpoint por `session_id`, como en el caso anterior.
+   Exige la continuidad del mismo agente solo cuando la persona o el encargo lo
+   pidan: añade `agent_id` a los filtros de sesión y checkpoint y, si no hay
+   checkpoint de ese agente, decláralo en vez de adoptar el de otro en silencio.
+   Ninguno de los dos casos recorre páginas: si la sesión buscada queda fuera de
+   la ventana, amplía el corte y repite el `find` de sesiones.
+   Lee objetivo, estado, próximos pasos, ficheros y preguntas abiertas. Si no
+   hay checkpoint, el historial de la sesión anterior es el siguiente recurso.
+5. Decisiones de la tarea: `find` en `/mem/observations` por `kind='decision'`,
+   `status='active'` y el `topic_key` de la tarea en curso, con límite 5. No
+   pidas «todas las decisiones activas». Sin `topic_key` conocido, pide una
+   página mínima (límite 3) y declara el recorte de `truncated`: ese caso es un
+   aviso, no una recuperación completa.
 6. Observaciones abiertas: `find` por `status='needs_review'` y revisa las
    `open_questions` del checkpoint.
 7. Para cuando la pregunta esté respondida. Lee el detalle con `cat` solo si la
    fila localizada no basta; no exportes tablas.
 
 Límite de contexto: apunta a seis invocaciones o menos para reanudar
-(M-ACM-01) y no acumules filas completas. `find` devuelve filas enteras y no hay
-proyección: el control está en el filtro, el límite y el tamaño del texto.
+(M-ACM-01) y no acumules filas completas. El checkpoint vigente cuesta uno o
+dos `find` acotados (por `session_id`, o sesiones y luego checkpoint); nunca uno
+sin filtro. El historial de la sesión no forma parte del guion por defecto: se
+pide después, solo si no hay checkpoint o si la pregunta lo exige. `find`
+devuelve filas enteras y no hay proyección: el control está en el filtro, el
+límite y el tamaño del texto.
 
 ## 2. Captura de conocimiento durante el trabajo
 
@@ -89,18 +116,29 @@ actividad.
 3. Por texto: `grep` con un término distintivo y límite corto. Es subcadena
    literal y sensible a mayúsculas; después lee el campo con `cat`.
 4. Recencia: dentro de una ventana acotada, el UUIDv7 mayor es el más reciente.
-   No esperes orden descendente ni recuentos baratos.
+   No esperes orden descendente ni recuentos baratos. Para el checkpoint vigente
+   pide por `session_id` (protocolo 1.4) en vez de ordenar la tabla.
 5. Si el término no aparece, reformula con las palabras que usaría quien
    capturó; no pidas la tabla completa. Un fallo de recuperación es una señal
    sobre la captura, no una invitación a exportar.
-6. Contexto de reanudación con presupuesto cerrado: cuatro `find` filtrados y
-   nada más — checkpoint activo de la sesión previa, observaciones de esa
-   sesión, decisiones activas y preferencias activas — sin listado completo de
-   sesiones y sin repetir con `cat` lo que un `find` ya devolvió. La evidencia
-   de ACM-05 midió este conjunto en 7 729 bytes ≈ 1 933 tokens estimados,
-   dentro del objetivo de M-ACM-03; añadir el listado de sesiones o el detalle
-   redundante lo superó (2 503 con el `cat`). El detalle se pide después, solo
-   del elemento que vayas a usar.
+6. Contexto de reanudación con presupuesto cerrado y guion acotado por defecto:
+   - Sesiones: ventana acotada del protocolo 1.4 o `session_id` conocido.
+   - Checkpoint: por `session_id` y `status='active'`; uno o dos `find`.
+   - Decisiones: solo las activas del `topic_key` de la tarea en curso, límite
+     5. Sin `topic_key`, página mínima (límite 3) con aviso de recorte.
+   - Preferencias: solo las claves aplicables, por `pref_key` y
+     `status='active'`, límite 2 por clave y como máximo tres claves; sin
+     claves, página mínima (límite 3).
+   El historial de la sesión no forma parte del guion: se pide si no hay
+   checkpoint o si la pregunta lo exige. Nada de `find` sin filtro ni `cat`
+   redundante. Con `session_id` conocido y dos claves aplicables son cuatro
+   `find`; en frío, la ventana añade el quinto. La re-medición sobre la base de
+   10 000 observaciones está en
+   `scenarios/evidence/evidence-benchmark.md`, «Re-medición M-ACM-03»: el guion
+   acotado con sesión conocida cumple los 2 000 tokens; en frío la ventana de
+   sesiones lo desborda porque `find` devuelve filas enteras (C-ACM-03). El
+   objetivo no se toca: se declara el resultado. El detalle se pide después,
+   solo del elemento que vayas a usar.
 
 ## 4. Actualización y consolidación
 
@@ -180,11 +218,21 @@ Un checkpoint captura el estado de reanudación de una sesión.
 
 ### 6.2 Reanudación
 
-1. Ejecuta el protocolo 1 con el checkpoint como pieza central.
-2. Continúa desde `next_steps`; no repitas los hallazgos ya capturados.
-3. Revisa la cola `needs_review` antes de dar por vigente una decisión dudosa.
-4. Si el checkpoint pertenece a otra sesión u otro agente, es válido: la
-   continuidad es del proyecto y la procedencia queda registrada.
+1. Ejecuta el protocolo 1 con el checkpoint como pieza central y el guion
+   acotado de §3.6: por `session_id` si la sesión es conocida; si no, por la
+   sesión más reciente de la ventana (protocolo 1.4). Decisiones solo del
+   `topic_key` de la tarea en curso y preferencias solo por `pref_key`
+   aplicable. No pidas la tabla de checkpoints sin filtro.
+2. La continuidad es del proyecto por defecto, entre sesiones y agentes: un
+   checkpoint de otra sesión u otro agente es válido y la procedencia queda
+   registrada. Si el encargo exige el mismo agente, filtra por `agent_id` y, sin
+   checkpoint suyo, decláralo.
+3. Continúa desde `next_steps`; no repitas los hallazgos ya capturados.
+4. Revisa la cola `needs_review` antes de dar por vigente una decisión dudosa.
+5. Límite residual: un checkpoint activo huérfano de una sesión anterior a la
+   ventana solo aparece ampliando el corte. Es convención de la skill, no
+   garantía del motor: `find` no tiene orden descendente (C-ACM-03) y la tabla
+   no se recorre entera.
 
 ## 7. Resolución de conflictos y recuerdos contradictorios
 
