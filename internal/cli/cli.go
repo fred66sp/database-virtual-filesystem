@@ -3,8 +3,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
+
+	"dbvfs/internal/app"
+	"dbvfs/internal/state"
 )
 
 // Run handles exactly one invocation: parse, dispatch and render. It is the
@@ -24,7 +28,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	data, err := execute(inv)
+	res, err := execute(inv)
 	if err != nil {
 		return fail(stdout, stderr, err)
 	}
@@ -32,16 +36,90 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stdout, stderr, err)
 	}
-	if err := writeJSON(stdout, successEnvelope(data, meta{RequestID: id})); err != nil {
+	if err := writeJSON(stdout, successEnvelope(res.data, meta{Truncated: res.truncated, RequestID: id})); err != nil {
 		return fail(stdout, stderr, err)
 	}
 	return 0
 }
 
-// execute is the dispatcher. Command behaviour arrives with its work package;
-// until then every command answers with the standard error envelope.
-func execute(inv *invocation) (any, error) {
-	return nil, codedError(CodeUnsupported, "%s is not implemented until %s", inv.spec.name, inv.spec.wp)
+// result is what a handler returns to the envelope: data plus the pagination
+// flag meta.truncated.
+type result struct {
+	data      any
+	truncated bool
+}
+
+// execute is the dispatcher. Commands implemented by a later work package keep
+// answering with the standard error envelope.
+func execute(inv *invocation) (result, error) {
+	switch inv.spec.name {
+	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat":
+		return executeRead(inv)
+	}
+	return result{}, codedError(CodeUnsupported, "%s is not implemented until %s", inv.spec.name, inv.spec.wp)
+}
+
+// executeRead wires the read side: config directory, operation deadline and
+// the application service. Mutations and sessions arrive in later packages.
+func executeRead(inv *invocation) (result, error) {
+	dir, err := state.Dir()
+	if err != nil {
+		return result{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), inv.timeout)
+	defer cancel()
+
+	svc := app.Service{ConfigDir: dir, Timeout: inv.timeout}
+	switch inv.spec.name {
+	case "mount":
+		info, err := svc.Mount(inv.args[0], inv.alias, inv.mode)
+		return result{data: info}, err
+	case "umount":
+		info, err := svc.Umount(inv.alias)
+		return result{data: info}, err
+	case "mounts":
+		mounts, err := svc.Mounts()
+		if err != nil {
+			return result{}, err
+		}
+		return result{data: mountsData{Mounts: mounts}}, nil
+	case "ls":
+		if inv.cursor != "" {
+			return result{}, codedError(CodeUnsupported, "pagination cursors are not implemented until WP-03")
+		}
+		limit := inv.limit
+		if limit == 0 {
+			limit = maxLimit
+		}
+		data, truncated, err := svc.LS(ctx, *inv.path, limit)
+		return result{data: data, truncated: truncated}, err
+	case "tree":
+		limit := inv.limit
+		if limit == 0 {
+			limit = maxLimit
+		}
+		data, truncated, err := svc.Tree(ctx, *inv.path, inv.depth, limit)
+		return result{data: data, truncated: truncated}, err
+	case "stat":
+		data, err := svc.Stat(ctx, *inv.path)
+		return result{data: data}, err
+	case "describe":
+		data, err := svc.Describe(ctx, *inv.path)
+		return result{data: data}, err
+	case "cat":
+		data, err := svc.Cat(ctx, *inv.path)
+		return result{data: data}, err
+	}
+	return result{}, unreachableError(inv.spec.name)
+}
+
+// mountsData is the mounts command shape: a deterministic list, never null.
+type mountsData struct {
+	Mounts []app.MountInfo `json:"mounts"`
+}
+
+func unreachableError(name string) error {
+	return codedError(CodeInternal, "no handler for %s", name)
 }
 
 func fail(stdout, stderr io.Writer, err error) int {
