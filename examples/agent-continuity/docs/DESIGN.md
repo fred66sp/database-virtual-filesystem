@@ -1,6 +1,6 @@
 # Agent Continuity Memory (ACM) — Technical Design
 
-**Versión:** 0.1.0 · **Estado:** en revisión · **Fecha:** 2026-11-19 · **Requisitos:** [PRD.md](PRD.md) v0.1.0
+**Versión:** 0.1.0 · **Estado:** en revisión del PO con el PRD actualizado (§18) · **Fecha:** 2026-11-19 · **Requisitos:** [PRD.md](PRD.md) v0.1.0
 **Base:** db-ai v0.2.0 — [PRD de db-ai](../../../docs/PRD.md) y [DESIGN de db-ai](../../../docs/DESIGN.md).
 **Skill de referencia:** paquete local `db-ai` v0.1.0 en `SKILLS-AGP/src/db-ai/`: `SKILL.md` y `references/comandos.md`, `references/escritura.md`, `references/errores.md`.
 
@@ -78,13 +78,16 @@ La skill guarda el `project_key` esperado en su configuración de proyecto, fuer
 
 ### 3.3 Bootstrap
 
-1. Crear `.agent-memory/` y excluirlo en `.gitignore`.
-2. Aplicar el DDL de §4.8 con SQLite, en una conexión con `PRAGMA foreign_keys = ON`.
-3. Insertar las filas de `meta` de §3.2.
-4. Configurar el montaje `mem` en `rw` con la política de §6, según la forma de configuración de DESIGN de db-ai §9.
-5. Verificar `mounts`, `describe /mem/observations` y la lectura de `meta` antes de capturar.
+`init.sh` implementa este bootstrap; no es una nueva CLI de ACM. Por defecto crea una memoria limpia y `--demo` añade el fixture de `seed.sql`.
 
-db-ai no crea tablas ni índices (PRD de db-ai §2 y §8; skill `db-ai`). El bootstrap es una dependencia explícita del operador, no una nueva CLI de ACM. No se fija `journal_mode` en esta versión: se deja el valor por defecto de SQLite y la contención se resuelve con las transacciones y los tiempos límite de db-ai. Activar WAL es una decisión futura sujeta a prueba.
+1. Crear `.agent-memory/` y excluirlo en `.gitignore`.
+2. Tomar el mismo `flock` exclusivo que db-ai sobre `$XDG_CONFIG_HOME/db-ai/config.lock`, para que la mezcla de `config.json` no pierda montajes escritos por otro proceso.
+3. Aplicar el DDL de §4.8 y las filas de `meta` de §3.2 en una sola transacción con `-bail` y `PRAGMA foreign_keys = ON`; si algo falla, la transacción se revierte y no se publica una base a medias.
+4. Con `--demo`, aplicar `seed.sql` en la misma transacción y solo sobre una base nueva.
+5. Registrar el montaje `mem` en `rw` con la política de §6, conservando los demás alias, políticas y `cursor_key`.
+6. Verificar `mounts`, `describe /mem/observations` y la lectura de `meta` antes de capturar.
+
+Sobre una base existente, `init.sh` no re-aplica el DDL ni toca los recuerdos: solo asegura el montaje. Una base parcial (menos de cinco tablas) se rechaza con error en vez de completarse a ciegas. db-ai no crea tablas ni índices (C-ACM-07); el bootstrap sigue siendo una dependencia explícita del operador. No se fija `journal_mode` en esta versión: se deja el valor por defecto de SQLite y la contención se resuelve con las transacciones y los tiempos límite de db-ai. Activar WAL es una decisión futura sujeta a prueba.
 
 ## 4. Modelo de datos
 
@@ -419,12 +422,14 @@ No se usa la sesión `--session` de db-ai para la memoria: esa sesión solo mant
 
 ### 8.6 Reanudar
 
-1. `find` de sesiones del proyecto, con límite; recorrer de UUIDv7 mayor a menor hasta encontrar una con checkpoint activo. Si se exige continuidad del mismo agente, filtrar por `agent_id`; por defecto, la continuidad es del proyecto.
+1. Acotar la búsqueda del checkpoint antes de pedirla: `find` ordena por PK ascendente y no garantiza el más reciente en la primera página (C-ACM-03). Con `session_id` conocido (handoff o reanudación de una sesión concreta), `find` de checkpoints por `session_id` y `status = 'active'`, con límite corto; el UUIDv7 mayor de esa página es el vigente. Sin sesión conocida, `find` de sesiones por `started_at` dentro de una ventana acotada (por defecto, los últimos 14 días) y límite corto; si la respuesta trae `truncated`, acortar el intervalo y repetir, sin recorrer páginas; con la ventana en memoria, ordenar localmente por UUIDv7 mayor y tomar la primera sesión con checkpoint activo.
 2. `find` del checkpoint activo de esa sesión.
-3. `find` de decisiones activas relevantes, con límite y `topic_key` cuando se conoce.
-4. `find` de preferencias activas aplicables.
-5. Leer solo el detalle que la pregunta exige; no exportar tablas.
+3. `find` de decisiones activas solo del `topic_key` de la tarea en curso, con límite 5. Sin `topic_key` conocido, página mínima (límite 3) y declarar el recorte de `truncated`.
+4. `find` de preferencias por `pref_key` aplicable, límite 2 por clave y como máximo tres claves; sin claves conocidas, página mínima (límite 3).
+5. Leer solo el detalle que la pregunta exige; no exportar tablas. El historial de la sesión no forma parte del guion: se pide si no hay checkpoint o si la pregunta lo requiere.
 6. Respetar los presupuestos de §10.
+
+Exigir la continuidad del mismo agente solo cuando la persona o el encargo lo pidan: añadir `agent_id` a los filtros de sesión y checkpoint y, si no hay checkpoint de ese agente, declararlo en vez de adoptar el de otro en silencio.
 
 ### 8.7 Revisar y marcar obsolescencia
 
@@ -481,15 +486,17 @@ Una fila `superseded` exige `superseded_by`; una `active` lo prohíbe. Una fila 
 | Pregunta | Consulta | Límite |
 |---|---|---|
 | ¿Qué sesiones están abiertas? | `find` en `sessions` por `agent_id` y `status` | 20 |
-| ¿Cuál es la última? | elegir el UUIDv7 mayor del resultado anterior | no aplica |
-| ¿Dónde quedamos? | `find` en `checkpoints` por `session_id` y `status = 'active'` | 5 |
+| ¿Cuál es la última? | elegir el UUIDv7 mayor de la ventana acotada de sesiones | no aplica |
+| ¿Dónde quedamos? | `find` en `checkpoints` por `session_id` y `status = 'active'`; sin sesión conocida, la sesión más reciente de la ventana por `started_at` | 5 |
 | ¿Qué decidimos sobre T? | `find` en `observations` por `kind = 'decision'`, `topic_key` y `status` | 10 |
 | ¿Qué sabemos de un término? | `grep` en `observations` con término distintivo | 20 |
 | ¿Qué preferencias rigen? | `find` en `preferences` por `status`, o por `pref_key` | 20 |
 | ¿Qué pasó en esta sesión? | `find` en `observations` por `session_id` | 50 |
 | ¿Qué hay en la base? | `describe` y `stat`; no `export` completo | no aplica |
 
-`find` devuelve filas completas y ordena por PK ascendente. Para la recencia se usa el UUIDv7 mayor de una ventana acotada, no una ordenación descendente que db-ai no expone. `grep` devuelve la ruta de la fila, la columna y la posición; después se lee el campo con `cat`.
+`find` devuelve filas completas y ordena por PK ascendente. Para la recencia se usa el UUIDv7 mayor de una ventana acotada de `started_at` —con corrección del corte si `truncated`—, no una ordenación descendente que db-ai no expone. El checkpoint se busca por `session_id`; solo sin sesión conocida se busca primero la sesión en la ventana. `grep` devuelve la ruta de la fila, la columna y la posición; después se lee el campo con `cat`.
+
+El guion por defecto está acotado (protocolos de la skill, §1.4 y §3.6): decisiones solo del `topic_key` de la tarea en curso y preferencias solo por las `pref_key` aplicables. Con `session_id` conocido son cuatro `find`; en frío, la ventana de sesiones añade el quinto. La medición está en [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8.
 
 ### 10.2 Divulgación progresiva
 
@@ -588,7 +595,7 @@ Notas de las decisiones con más matiz:
 
 ## 14. Carencias de db-ai detectadas
 
-Estas carencias son propuestas de evolución independientes. No amplían el alcance de ACM y no se implementan aquí. Se documentan porque ACM las encuentra al componer sobre el contrato de db-ai v0.2.0.
+Estas carencias son propuestas de evolución independientes. Salvo la nota de estado de C-ACM-01, no se implementan aquí. Se documentan porque ACM las encuentra al componer sobre el contrato de db-ai v0.2.0.
 
 ### C-ACM-01 — Sin comando ni flag de versión
 
@@ -597,6 +604,8 @@ Estas carencias son propuestas de evolución independientes. No amplían el alca
 **Impacto en ACM:** no se puede confirmar en tiempo de ejecución que el binario instalado es v0.2.0. La versión se fija por contrato y despliegue, y `schema_version` cubre el esquema, no la CLI.
 
 **Propuesta:** añadir `version` o `--version` a db-ai, o incluir la versión en `mounts`/`meta` de una operación existente. Es una propuesta de evolución, no una ampliación de ACM.
+
+**Estado (2026-11-19):** aprobada por el PO e implementada en el árbol como `db-ai version`, que emite `{version, commit, state}` con el sobre JSON estándar; el contrato está en DESIGN de db-ai §3. Pendiente de commit y release con autorización del PO; hasta entonces, el binario instalado puede devolver `E_USAGE` y, sin `ldflags`, `commit` es `unknown`.
 
 ### C-ACM-02 — Sin búsqueda difusa, FTS ni ranking
 
@@ -644,7 +653,7 @@ Estas carencias son propuestas de evolución independientes. No amplían el alca
 
 **Impacto en ACM:** el bootstrap es una dependencia del operador: `.agent-memory/` y el DDL se crean fuera de db-ai. No hay una operación de ACM que inicialice la base sola.
 
-**Propuesta:** ninguna sobre db-ai; el bootstrap de ACM se documenta en §3.3 y se implementará en ACM-03/ACM-04. Si se quisiera una inicialización integrada, sería una herramienta de despliegue, no una ampliación del núcleo.
+**Propuesta:** ninguna sobre db-ai; el bootstrap de ACM se documenta en §3.3 y está implementado en `init.sh`. Si se quisiera una inicialización integrada, sería una herramienta de despliegue, no una ampliación del núcleo.
 
 ### C-ACM-08 — `describe` no expone las expresiones `CHECK`
 
@@ -692,11 +701,11 @@ La comprobación de navegabilidad confirma la regla de §4.1: con `id TEXT NOT N
 
 ### 15.3 Límites de esta verificación
 
-- ACM no está implementado: el esquema y la política son contratos; la skill y sus convenciones pertenecen a ACM-04.
-- El binario de db-ai usado no expone versión (C-ACM-01); la compatibilidad con el contrato v0.2.0 se apoya en los documentos y en el comportamiento observado, no en una comprobación de versión.
-- No se midió latencia, consumo de contexto ni comportamiento con 10 000 filas; eso pertenece a ACM-05.
+- ACM está implementado en el árbol (`init.sh`, `skill/` y escenarios) y se ejecutó. Las pruebas de esta sección miden el esquema y la integración con db-ai, no el cumplimiento espontáneo de cada convención de la skill.
+- `db-ai version` existe en el árbol y se comporta según DESIGN de db-ai §3; el binario instalado puede no exponerlo hasta la release, y sin `ldflags` el `commit` es `unknown` (C-ACM-01).
+- El rendimiento y el contexto se midieron sobre un fixture determinista de 10 240 observaciones y hardware declarado en [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md): M-ACM-01, M-ACM-02 y M-ACM-04 se superan; M-ACM-03 se supera con `session_id` conocido (1 444 tokens) y falla en frío (9 058) por C-ACM-03. M-ACM-05 se probó con dos agentes reales ([evidence-agents.md](../scenarios/evidence/evidence-agents.md)): 5 de 5 por evaluador delegado, pendiente de ratificación humana. No es una prueba de producción.
 - No se probó `E_COMMIT_UNKNOWN` de forma provocada; el protocolo de §11 sigue el contrato y la skill local `db-ai`.
-- No se probó concurrencia real con dos procesos; el razonamiento de §5.4 se apoya en la semántica de ETag y transacción de db-ai.
+- La concurrencia de `init.sh` con db-ai sobre `config.json` se probó con `flock` en la batería de pruebas. La primera captura simultánea de dos filas activas del mismo tema no se provocó: §5.4 sigue siendo razonamiento sobre ETag y transacción.
 
 ## 16. Riesgos y límites del diseño
 
@@ -712,4 +721,4 @@ La comprobación de navegabilidad confirma la regla de §4.1: con `id TEXT NOT N
 | Reloj y UUIDv7 | recencia incorrecta por desfase | UTC, UUIDv7 monótono y ventanas acotadas |
 | Bootstrap y copia | base perdida si no se copia | runbook del operador; `.agent-memory/` fuera de Git |
 | Dependencia de db-ai | un cambio de contrato rompe ACM | fijar v0.2.0 y probar la integración antes de subir versión |
-| Sin implementación | el diseño no demuestra el resultado por sí solo | ACM-03 y ACM-05 |
+| Versión desplegada | `db-ai version` existe en el árbol, pero el binario instalado puede ser anterior | verificar `version` y `commit` antes de confiar en el contrato; release con autorización del PO |

@@ -5,6 +5,35 @@ Todos los cambios notables de este proyecto se documentan en este fichero.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es/).
 
+## [Sin publicar]
+
+### Añadido
+
+- Comando `db-ai version`: responde con el sobre JSON estándar e identifica la versión
+  funcional, la revisión Git inyectada al compilar con `-ldflags -X` (`unknown` sin
+  inyección) y el estado de build `dev`/`release`. Sin dependencias nuevas.
+- `init.sh` de ACM con modo demostración explícito (`--demo`) y arnés de benchmark con
+  fixture reproducible de 10 000+ observaciones (`tools/gen-fixture.py`,
+  `tests/benchmark.py`) con medición de M-ACM-01 a M-ACM-04.
+- Evidencia de continuidad con dos agentes reales en sesiones independientes
+  (`scenarios/scenario-agents.md`, `scenarios/evidence/evidence-agents.md`), con guion
+  reproducible de las cinco preguntas de reanudación.
+
+### Modificado
+
+- Convención de reanudación: el checkpoint vigente se recupera por `session_id` cuando
+  la sesión es conocida y, si no, por la sesión más reciente de una ventana acotada de
+  `started_at` con corrección del corte si la página viene truncada; el guion por
+  defecto acota decisiones por `topic_key` y preferencias por `pref_key`.
+
+### Corregido
+
+- El seed de demostración se aplicaba a cualquier memoria nueva, incluida la de un
+  proyecto real: ahora `init.sh` crea memoria limpia y los datos ficticios exigen
+  `--demo`.
+- Dos `init.sh` concurrentes perdían montajes de `config.json`: ahora comparten el
+  mismo bloqueo `flock` que db-ai (`config.lock`).
+
 ## [0.2.0] - 2026-11-19
 
 ### Añadido

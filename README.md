@@ -14,6 +14,12 @@ Este README no duplica su contenido: enlaza.
 - [Política Git y contribución](CONTRIBUTING.md)
 - [Registro de cambios](CHANGELOG.md)
 - [Mapa del repositorio para agentes](AGENTS.md)
+- [Documentación web (HTML)](docs/web/index.html) — contratos navegables de db-ai y ACM
+
+La documentación web se previsualiza en local con [`serve-web.sh`](serve-web.sh):
+`./serve-web.sh` sirve `docs/web/` en `http://127.0.0.1:8891`; `./serve-web.sh
+status` y `./serve-web.sh stop` lo gestionan. No es un despliegue, solo
+previsualización.
 
 ## Estado
 
@@ -50,6 +56,18 @@ go build ./cmd/db-ai
 go test ./...
 go test -race ./...
 ```
+
+Para que el binario declare el commit del que se compiló, inyéctalo con
+`-ldflags`; sin inyección, `db-ai version` informa `commit: "unknown"` y
+`state: "dev"`:
+
+```bash
+go build -ldflags "-X dbvfs/internal/cli.commit=$(git rev-parse --short HEAD)" -o db-ai ./cmd/db-ai
+./db-ai version
+```
+
+`db-ai version` no toca configuración, estado ni bases: emite en `data` la
+versión funcional, el commit y el estado de build ([DESIGN §3](docs/DESIGN.md)).
 
 El binario no se versiona en el repositorio: se construye desde el código
 (`go build -o db-ai ./cmd/db-ai`) y se instala en tu PATH local (p. ej.

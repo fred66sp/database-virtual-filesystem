@@ -1,6 +1,6 @@
 # Agent Continuity Memory (ACM) — PRD
 
-**Versión:** 0.1.0 · **Estado:** en revisión · **Fecha:** 2026-11-19 · **Diseño técnico:** [DESIGN.md](DESIGN.md)
+**Versión:** 0.1.0 · **Estado:** en revisión del PO, métricas medidas (§18) · **Fecha:** 2026-11-19 · **Diseño técnico:** [DESIGN.md](DESIGN.md)
 **Base:** [db-ai v0.2.0](../../../docs/PRD.md), cuyo contrato técnico vive en [DESIGN de db-ai](../../../docs/DESIGN.md).
 
 ## 1. Metadatos
@@ -10,7 +10,7 @@
 | Nombre | Agent Continuity Memory (ACM) |
 | Tipo | feature sobre db-ai; ejemplo de composición SQLite + db-ai + skill |
 | Versión | 0.1.0 |
-| Estado | en revisión; borrador para decisión del PO |
+| Estado | en revisión: pasa a revisión del PO con métricas medidas (§18); decisiones §14 aplicadas |
 | Propietario | PO del proyecto |
 | Fecha | 2026-11-19 |
 | Base funcional | db-ai v0.2.0 |
@@ -102,15 +102,17 @@ Una sesión nueva recupera el checkpoint activo, las decisiones vigentes y las p
 
 ## 7. Métricas de éxito
 
-Las líneas base son `UNKNOWN` porque ACM aún no se implementa. Los objetivos son propuestas para ACM-05, no compromisos medidos. El método y la fuente deben quedar registrados antes de ejecutar la validación.
+Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md), sobre un fixture determinista de 10 240 observaciones; M-ACM-05, de [evidence-agents.md](../scenarios/evidence/evidence-agents.md), con dos agentes reales, y la base pequeña de [evidence-continuity.md](../scenarios/evidence/evidence-continuity.md). Los objetivos no cambian con la medición.
 
 | Métrica | Definición | Método | Fuente | Línea base | Objetivo | Plazo | Umbral de fracaso |
 |---|---|---|---|---|---|---|---|
-| M-ACM-01 Invocaciones por reanudación | número de invocaciones de db-ai desde el inicio de una reanudación hasta disponer de checkpoint activo, decisiones activas relevantes y preferencias aplicables | guion reproducible con una sesión previa, tres decisiones activas y dos preferencias; el arnés cuenta invocaciones | informe de ACM-05 | UNKNOWN | ≤ 6 | ACM-05 | > 12 |
-| M-ACM-02 Latencia de recuperación p95 | percentil 95 del tiempo de pared por invocación de lectura en la reanudación, con fixture de 10 000 observaciones en disco local | 100 repeticiones; reloj del arnés; hardware declarado en el informe | informe de ACM-05 | UNKNOWN | p95 ≤ 150 ms | ACM-05 | p95 > 500 ms |
-| M-ACM-03 Contexto consumido por reanudación | bytes de stdout acumulados por las invocaciones de M-ACM-01, convertidos a tokens con un factor de conversión declarado en el informe | el arnés suma stdout; excluye stderr; declara la aproximación | informe de ACM-05 | UNKNOWN | ≤ 2 000 tokens | ACM-05 | > 6 000 tokens |
-| M-ACM-04 Coste de captura consolidada | invocaciones de db-ai por observación o decisión consolidada, sin contar la recuperación de un duplicado exacto, incluida la verificación posterior | el arnés cuenta invocaciones del escenario de captura | informe de ACM-05 | UNKNOWN | ≤ 3 | ACM-05 | > 6 |
-| M-ACM-05 Reanudación correcta | proporción de cinco preguntas de reanudación respondidas correctamente usando solo la memoria, sin conversación ni Git | evaluador humano con guion; contrasta respuestas con el estado del repositorio | informe de ACM-05 | UNKNOWN | 5 de 5 | ACM-05 | < 4 de 5 |
+| M-ACM-01 Invocaciones por reanudación | número de invocaciones de db-ai desde el inicio de una reanudación hasta disponer de checkpoint activo, decisiones activas relevantes y preferencias aplicables | guion reproducible con una sesión previa, tres decisiones activas y dos preferencias; el arnés cuenta invocaciones | evidence-benchmark.md §8 | 5 en frío; 4 con `session_id` conocido (guion acotado) | ≤ 6 | ACM-05 | > 12 |
+| M-ACM-02 Latencia de recuperación p95 | percentil 95 del tiempo de pared por invocación de lectura en la reanudación, con fixture de 10 000 observaciones en disco local | 100 repeticiones; reloj del arnés; hardware declarado en el informe | evidence-benchmark.md §8 | p95 8,08 ms por invocación del guion acotado; 7,51 ms en las operaciones nuevas (n=800) | p95 ≤ 150 ms | ACM-05 | p95 > 500 ms |
+| M-ACM-03 Contexto consumido por reanudación | bytes de stdout acumulados por las invocaciones de M-ACM-01, convertidos a tokens con un factor de conversión declarado en el informe | el arnés suma stdout; excluye stderr; declara la aproximación | evidence-benchmark.md §2 y §8 | 1 444 tokens con `session_id` conocido (SUPERADO); 9 058 en frío y 19 660 con el guion completo anterior (FALLIDO) | ≤ 2 000 tokens | ACM-05 | > 6 000 tokens |
+| M-ACM-04 Coste de captura consolidada | invocaciones de db-ai por observación o decisión consolidada, sin contar la recuperación de un duplicado exacto, incluida la verificación posterior | el arnés cuenta invocaciones del escenario de captura | evidence-benchmark.md §4 | 2 invocaciones por captura, con verificación posterior (10/10) | ≤ 3 | ACM-05 | > 6 |
+| M-ACM-05 Reanudación correcta | proporción de cinco preguntas de reanudación respondidas correctamente usando solo la memoria, sin conversación ni Git | evaluador humano con guion; contrasta respuestas con el estado del repositorio | evidence-agents.md | 5 de 5 por evaluador delegado; ratificación humana pendiente | 5 de 5 | ACM-05 | < 4 de 5 |
+
+**M-ACM-03 depende del guion y se declara sin suavizarlo:** el guion acotado por `topic_key` y `pref_key` con `session_id` conocido cumple (1 444 tokens ≤ 2 000); el mismo guion en frío, sin sesión conocida, falla (9 058 tokens) porque la ventana de sesiones devuelve filas completas y no hay proyección (C-ACM-03). El objetivo permanece en 2 000 tokens. **M-ACM-05** se midió con dos agentes reales y un evaluador delegado: 5 de 5; el PRD pide evaluador humano, así que la ratificación del PO queda pendiente.
 
 ## 8. Alcance de esta versión
 
@@ -329,10 +331,10 @@ Las líneas base son `UNKNOWN` porque ACM aún no se implementa. Los objetivos s
 |---|---|---|---|---|---|
 | db-ai v0.2.0 | dependencia | la CLI implementada expone montajes, rutas, ETag, batch, política y auditoría conforme a sus contratos | hecho / decisión aprobada | ACM no puede operar | pruebas de integración y revisión de contrato; el README declara el estado |
 | PK textual no nula | supuesto | una PK `TEXT NOT NULL` es navegable en db-ai | hecho observado | la tabla queda no navegable y ACM no puede usar rutas | el esquema usa `TEXT NOT NULL PRIMARY KEY`; `describe` lo confirma |
-| Bootstrap del esquema | dependencia | el operador aplica el DDL una vez con SQLite fuera de db-ai | dependencia | no hay base utilizable | runbook y `schema_version`; db-ai no hace DDL |
+| Bootstrap del esquema | dependencia | el operador ejecuta `init.sh`, que aplica el DDL una vez con SQLite fuera de db-ai | dependencia | no hay base utilizable | runbook y `schema_version`; `init.sh` idempotente; db-ai no hace DDL |
 | `.agent-memory/` ignorado | dependencia | el proyecto anfitrión excluye el directorio de memoria | dependencia | la memoria se versiona y se mezcla con el código | `git check-ignore`; tarea ACM-04/03 |
 | Convenciones de la skill | hipótesis | los agentes consolidan, sustituyen y revisan según la skill | hipótesis | la memoria se degrada aunque el esquema sea válido | validación ACM-05; revisión de la skill |
-| Sin comando de versión | hecho observado | db-ai no expone `version` ni `--version`; ambos devuelven `E_USAGE` | hecho | no se puede confirmar la versión por CLI | fijar por contrato y despliegue; propuesta C-ACM-01 en DESIGN §14 |
+| Comando de versión | hecho observado | `db-ai version` existe en el árbol y responde `{version, commit, state}`; el binario instalado puede no incluirlo hasta la release | hecho | no se puede confirmar la versión por CLI con el binario publicado | C-ACM-01 implementada en el árbol; commit y release sujetos a autorización del PO (tk-22) |
 | Engram como inspiración | decisión | Engram aporta vocabulario conceptual, no código que clonar | decisión | se desviaría el alcance hacia MCP o nube | revisión de fuentes; ACM no implementa MCP |
 | Memoria por proyecto | restricción aprobada | una base por proyecto, alias `mem`, sin memoria global | decisión aprobada | se rompe el aislamiento | configuración de montaje; `project_key` en `meta` |
 | UUIDv7 | restricción aprobada | cada fila usa UUIDv7 textual como PK | decisión aprobada | se pierde orden temporal y estabilidad de rutas | validación de esquema y generación por el productor |
@@ -358,12 +360,13 @@ Las líneas base son `UNKNOWN` porque ACM aún no se implementa. Los objetivos s
 | Pregunta o decisión | Por qué importa | Responsable | Condición de respuesta |
 |---|---|---|---|
 | ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | **Decidido (PO, 2026-11-19): se mantiene el objetivo de M-ACM-03 (2 000 tokens)** y se ajusta la convención de recuperación de la skill al conjunto mínimo medido (7 729 B ≈ 1 933 tokens, protocolos.md §3.6); los objetivos de M-ACM-02 y M-ACM-05 quedan como están en §7 |
-| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | decisión de ACM-04 |
+| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | decisión de ACM-04; la política concreta pertenece al PO (tk-25) |
 | ¿Qué tope de cuerpo y qué retención se aplican a filas obsoletas? | afecta contexto y crecimiento | ingeniería y PO | **Decidido (PO, 2026-11-19): sin purga automática.** Las filas obsoletas permanecen con su `status`; la purga física es mantenimiento manual autorizado. Los topes de cuerpo son convención de la skill |
 | ¿Las preferencias son solo del proyecto o también por agente? | cambia el modelo de datos y la recuperación | PO | **Decidido (PO, 2026-11-19): solo por proyecto.** La identidad del agente queda como procedencia, no como clave de recuperación |
-| ¿La skill marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | skill y PO | revisión de convenciones — decisión de ACM-04 |
+| ¿La skill marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | skill y PO | revisión de convenciones — decisión de ACM-04; la política concreta pertenece al PO (tk-25) |
 | ¿Se necesita copia de seguridad o restauración en el alcance? | el directorio no está en Git | PO | **Decidido (PO, 2026-11-19): fuera de alcance.** Un `cp` del `.sqlite` es suficiente; no se añade nada al MVP |
-| ¿El bootstrap es un `schema.sql` con runbook o un paso del ejemplo ACM-03? | afecta reproducibilidad e instalación | ingeniería | **Resuelto (petición original del PO):** `init.sh` idempotente aplica `schema.sql` + `seed.sql` — es requisito, no decisión pendiente |
+| ¿El bootstrap es un `schema.sql` con runbook o un paso del ejemplo ACM-03? | afecta reproducibilidad e instalación | PO | **Decidido (PO, 2026-11-19, revisa la decisión previa):** `init.sh` crea memoria limpia por defecto (esquema, metadatos del proyecto y montaje) y `--demo` añade el fixture de `seed.sql`; sobre una base existente no re-aplica el DDL ni toca los recuerdos |
+| ¿Qué guion de recuperación se mide para M-ACM-03? | determina el contexto de reanudación y la comparabilidad de la métrica | PO | **Decidido (PO, 2026-11-19): guion acotado** por `topic_key` de la tarea y `pref_key` aplicable (protocolos.md §1.4 y §3.6). Resultado: con `session_id` conocido, 1 444 tokens y SUPERADO; en frío, 9 058 tokens y FALLIDO por C-ACM-03; el objetivo de 2 000 tokens queda intacto |
 
 ## 15. Plan de validación y revisión
 
@@ -392,6 +395,8 @@ Las líneas base son `UNKNOWN` porque ACM aún no se implementa. Los objetivos s
 | 2026-11-19 | 0.1.0 | Política de lectura total y escritura solo en tablas de memoria; sin `rm`, `mv` ni `cp` | propuesta | agente | evitar borrado y renombrado accidentales |
 | 2026-11-19 | 0.1.0 | Supersesión atómica en un lote, sin índices únicos parciales | propuesta | agente | db-ai no encadena filas creadas en el mismo lote |
 | 2026-11-19 | 0.1.0 | Recuperación acotada con UUIDv7, filtros y divulgación progresiva | propuesta | agente | db-ai no expone orden descendente ni proyección |
+| 2026-11-19 | 0.1.0 | `init.sh` crea memoria limpia por defecto; `--demo` añade el fixture (revisa la decisión previa) | aprobada | PO | un proyecto nuevo no debe contener datos ficticios (tk-34) |
+| 2026-11-19 | 0.1.0 | Guion de reanudación acotado por `topic_key` y `pref_key`; objetivo de M-ACM-03 intacto | aprobada | PO | el guion completo no cabe en 2 000 tokens (tk-23) |
 
 Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio del esquema o de la política, validación de métricas, decisión sobre las preguntas de §14, o cambio del alcance de la skill.
 
@@ -400,35 +405,36 @@ Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio 
 | Afirmación crítica | Grado | Fuente | Localización | Límite |
 |---|---|---|---|---|
 | db-ai expone rutas, ETag, política por prefijo, batch y auditoría | hecho | PRD y DESIGN de db-ai | PRD de db-ai §5 y §7; DESIGN de db-ai §3, §8, §9, §11 | contratos; la integración con el esquema se probó, no la auditoría de db-ai |
-| db-ai no ofrece comando ni flag de versión | hecho | ejecución observada | `db-ai version` y `db-ai --version` devuelven `E_USAGE` | la versión del binario no se puede confirmar por CLI |
+| db-ai expone `version` en el árbol, con `{version, commit, state}` | hecho | ejecución observada y documentación | `db-ai version`; DESIGN de db-ai §3; README y CHANGELOG | el binario instalado puede devolver `E_USAGE` hasta la release; sin `ldflags`, `commit` es `unknown` |
 | db-ai busca texto literal, sensible a mayúsculas, sin FTS | hecho | DESIGN de db-ai y skill local `db-ai` | DESIGN de db-ai §7; `src/db-ai/references/comandos.md` | no se mide recall ni latencia |
 | db-ai no expone proyección ni orden descendente en `find`/`export` | hecho | ayuda observada y DESIGN de db-ai | `find --help`, `export --help`; DESIGN de db-ai §3 frente a §6 | puede cambiar en una versión futura |
 | Una PK textual sin `NOT NULL` deja la tabla no navegable | hecho | `describe` observado sobre base temporal | DESIGN de ACM §4.1 y §15 | observado en el entorno de trabajo |
 | Engram usa sesiones, observaciones, `topic_key`, revisión y conflictos | hecho | documentación de Engram | GitHub `docs/ARCHITECTURE.md` | inspiración conceptual; no se clona ni se atribuye la misma implementación |
 | El problema de continuidad existe para agentes en este repositorio | inferencia | `AGENTS.md`, tablero y modelo de trabajo | §4 | sin entrevistas ni analítica; no se mide su magnitud |
-| La memoria acotada reduce el contexto de reanudación | hipótesis | razonamiento sobre el problema | §4.5 y §7 | debe validarse en ACM-05 |
+| La memoria acotada reduce el contexto de reanudación | hecho medido | benchmark con 10 240 observaciones y prueba con dos agentes | [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8; [evidence-agents.md](../scenarios/evidence/evidence-agents.md) | con `session_id` conocido cumple 1 444 tokens; en frío falla (9 058) por C-ACM-03; M-ACM-05 sin ratificación humana |
+| La skill `agent-continuity` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh`, `skill/` y `scenarios/evidence/` | la implementación vive en el árbol; su disponibilidad en el binario instalado depende de la release |
 | Una base por proyecto, UUIDv7 y skill en `examples/` | decisión aprobada | PO, encargo tk-18 | §16 | no consta en un documento versionado aparte del tablero |
 | db-ai v0.2.0 es la primera release | decisión aprobada | PO, encargo tk-18 | §16 | sujeta a la versión desplegada |
 | No se guardan conversaciones completas por defecto | decisión aprobada | PO, encargo tk-18 | §8.2 y §16 | la skill debe demostrar que cumple |
 
 ### Límites de la verificación
 
-- No hay implementación de ACM ni datos de uso; las métricas y sus objetivos son propuestas.
+- ACM está implementado en el árbol: `init.sh`, el esquema y la skill `skill/` existen y se ejecutaron. Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin la skill.
+- M-ACM-01 a M-ACM-04 están medidas sobre un fixture determinista de 10 240 observaciones y M-ACM-05 con dos agentes reales; falta la ratificación humana de M-ACM-05 que el propio objetivo exige. Veredictos en §7 y §17.
 - No se hicieron entrevistas ni observación de usuarios; las personas se sostienen en artefactos del repositorio.
-- El esquema se comprobó de forma sintáctica y operativa con db-ai sobre una base temporal, pero la skill y sus convenciones aún no existen.
-- La versión exacta del binario de db-ai no se pudo confirmar porque la CLI no la expone.
-- No se midió rendimiento a escala; 10 000 filas es una propuesta de fixture, no un resultado.
+- `db-ai version` existe en el árbol y devuelve `{version, commit, state}`, pero el binario instalado puede no exponerlo hasta la release y, sin `ldflags`, `commit` es `unknown` (DESIGN de db-ai §3; DESIGN §14 C-ACM-01).
+- El rendimiento y el consumo de contexto se midieron con 10 000 observaciones y hardware declarado; no son una prueba de producción ni de otros volúmenes, y el conteo de tokens usa la aproximación declarada bytes/4.
 - La documentación de Engram se consultó como inspiración; no se verificó su implementación interna ni se copió código.
 
 ## 18. Estado de preparación y puerta de calidad
 
 ```text
-Estado de preparación: PARCIAL
-Documento entregado: PRD completo, borrador para revisión del PO
+Estado de preparación: LISTO PARA REVISIÓN DEL PO
+Documento entregado: PRD completo; líneas base medidas y veredictos de M-ACM-01 a M-ACM-05 en §7 y §17
 Fuentes inventariadas: §1.1
 Afirmaciones críticas y trazabilidad: §17
-Contradicciones y UNKNOWN: líneas base de métricas UNKNOWN; magnitud del problema no medida; versión del binario no confirmable
-Decisiones pendientes: §14 (objetivos de métricas, revisión, preferencias, bootstrap, retención, copia) y las decisiones propuestas de DESIGN §13
-Validaciones necesarias: producto, diseño, ingeniería, QA y usuarios (§15)
-Veredicto de la puerta de calidad: PARCIAL
+Contradicciones y UNKNOWN: sin UNKNOWN vivos en las métricas; la magnitud del problema de continuidad no se midió con entrevistas
+Decisiones pendientes: ratificación humana de M-ACM-05 (PO); preguntas abiertas de §14 sobre la revisión de la cola `needs_review` (tk-25); propuestas de evolución C-ACM-01 a C-ACM-08 de DESIGN §14 (tk-22)
+Validaciones necesarias: producto, diseño, ingeniería, QA y usuarios (§15); M-ACM-05 exige evaluador humano
+Veredicto de la puerta de calidad: PASA A REVISIÓN; no se declara cerrada hasta la ratificación humana de M-ACM-05
 ```
