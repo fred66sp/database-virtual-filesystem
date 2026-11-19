@@ -8,7 +8,7 @@ import (
 // TestSentinelsStayDistinct guards the CLI mapping: no sentinel may match
 // another, or two codes would become indistinguishable.
 func TestSentinelsStayDistinct(t *testing.T) {
-	all := []error{ErrNotFound, ErrDenied, ErrConflict, ErrUnsupported, ErrInvalid}
+	all := []error{ErrNotFound, ErrDenied, ErrConflict, ErrUnsupported, ErrInvalid, ErrConstraint, ErrBusy, ErrCommitUnknown}
 	for i, a := range all {
 		for j, b := range all {
 			if i != j && errors.Is(a, b) {

@@ -37,6 +37,8 @@ CREATE TABLE plain (a TEXT, b INTEGER);
 INSERT INTO plain VALUES ('z', 2), ('a', 1);
 CREATE TABLE pairs (a TEXT, b INTEGER, v TEXT, PRIMARY KEY (a, b));
 INSERT INTO pairs VALUES ('a', 1, 'x'), ('a', 2, 'y'), ('b', 1, 'z');
+CREATE TABLE guarded (id INTEGER PRIMARY KEY, v TEXT);
+CREATE TRIGGER guarded_ins AFTER INSERT ON guarded BEGIN SELECT 1; END;
 `
 
 // openFixture creates a database with the test schema and returns its path plus
@@ -411,12 +413,339 @@ func TestOpenNeverCreatesTheFile(t *testing.T) {
 	}
 }
 
-func TestWriteIsUnsupported(t *testing.T) {
+// TestWriteMutatesInsideImmediateTransaction covers touch and write through the
+// storage port: explicit INSERT, ETag-checked UPDATE, rollback on a pre-commit
+// error, and the conservative refusals from DESIGN §8.
+func TestWriteMutatesInsideImmediateTransaction(t *testing.T) {
+	path, _ := openFixture(t)
+	st, err := Open(Options{Path: path, Mode: "rw"})
+	if err != nil {
+		t.Fatalf("Open rw: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ctx := context.Background()
+
+	// touch: omitted INTEGER PRIMARY KEY comes from the rowid alias.
+	var inserted storage.Row
+	err = st.Write(ctx, func(tx storage.Tx) error {
+		var err error
+		inserted, err = tx.Apply(ctx, storage.Mutation{
+			Kind:   "touch",
+			Table:  "items",
+			Fields: map[string]storage.Value{"note": {Kind: "text", Data: "new"}},
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+	if len(inserted.Key) != 1 || inserted.Key[0].Data != "4" {
+		t.Errorf("inserted key = %+v, want integer 4", inserted.Key)
+	}
+	if got := valueOf(inserted, "note"); got != (storage.Value{Kind: "text", Data: "new"}) {
+		t.Errorf("inserted note = %+v, want new", got)
+	}
+
+	// write: a partial UPDATE with the current ETag.
+	before := readRow(t, st, "items", 2)
+	var updated storage.Row
+	err = st.Write(ctx, func(tx storage.Tx) error {
+		var err error
+		updated, err = tx.Apply(ctx, storage.Mutation{
+			Kind: "write", Table: "items", Key: before.Key,
+			Fields:  map[string]storage.Value{"note": {Kind: "text", Data: "changed"}},
+			IfMatch: before.ETag,
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := valueOf(updated, "note"); got != (storage.Value{Kind: "text", Data: "changed"}) {
+		t.Errorf("updated note = %+v, want changed", got)
+	}
+	if updated.ETag == before.ETag {
+		t.Error("ETag did not change after the update")
+	}
+	if got := valueOf(readRow(t, st, "items", 2), "big"); got != (storage.Value{Kind: "integer", Data: "42"}) {
+		t.Errorf("untouched column big = %+v, want 42", got)
+	}
+
+	// An obsolete ETag is E_CONFLICT and leaves the row untouched.
+	err = st.Write(ctx, func(tx storage.Tx) error {
+		_, err := tx.Apply(ctx, storage.Mutation{
+			Kind: "write", Table: "items", Key: before.Key,
+			Fields:  map[string]storage.Value{"note": {Kind: "text", Data: "late"}},
+			IfMatch: before.ETag,
+		})
+		return err
+	})
+	if !errors.Is(err, storage.ErrConflict) {
+		t.Fatalf("stale ETag error = %v, want storage.ErrConflict", err)
+	}
+	if got := valueOf(readRow(t, st, "items", 2), "note"); got != (storage.Value{Kind: "text", Data: "changed"}) {
+		t.Errorf("row changed after the conflict: note = %+v", got)
+	}
+
+	// A failure after Apply still rolls the whole transaction back.
+	boom := errors.New("abort after apply")
+	err = st.Write(ctx, func(tx storage.Tx) error {
+		if _, err := tx.Apply(ctx, storage.Mutation{
+			Kind:   "touch",
+			Table:  "items",
+			Fields: map[string]storage.Value{"note": {Kind: "text", Data: "rolled back"}},
+		}); err != nil {
+			return err
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("rollback error = %v, want the caller error", err)
+	}
+	assertNoRow(t, st, "items", storage.Key{{Kind: "integer", Data: "5"}})
+}
+
+func TestWriteInsertWithDefaults(t *testing.T) {
+	path, _ := openFixture(t)
+	st, err := Open(Options{Path: path, Mode: "rw"})
+	if err != nil {
+		t.Fatalf("Open rw: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ctx := context.Background()
+
+	var row storage.Row
+	err = st.Write(ctx, func(tx storage.Tx) error {
+		var err error
+		row, err = tx.Apply(ctx, storage.Mutation{Kind: "touch", Table: "items"})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("touch with defaults: %v", err)
+	}
+	if len(row.Key) != 1 || row.Key[0].Data != "4" {
+		t.Errorf("key = %+v, want integer 4 from the rowid alias", row.Key)
+	}
+	if got := valueOf(row, "note"); got != (storage.Value{Kind: "null"}) {
+		t.Errorf("note = %+v, want the native default NULL", got)
+	}
+}
+
+func TestWriteRefusesUnsafeTargets(t *testing.T) {
+	path, _ := openFixture(t)
+	st, err := Open(Options{Path: path, Mode: "rw"})
+	if err != nil {
+		t.Fatalf("Open rw: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ctx := context.Background()
+
+	row := readRow(t, st, "items", 2)
+	tests := []struct {
+		name string
+		m    storage.Mutation
+		want error
+	}{
+		{
+			name: "generated column",
+			m:    storage.Mutation{Kind: "write", Table: "items", Key: row.Key, IfMatch: row.ETag, Fields: map[string]storage.Value{"doubled": {Kind: "integer", Data: "1"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "primary key update",
+			m:    storage.Mutation{Kind: "write", Table: "items", Key: row.Key, IfMatch: row.ETag, Fields: map[string]storage.Value{"id": {Kind: "integer", Data: "9"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "non-navigable table",
+			m:    storage.Mutation{Kind: "touch", Table: "plain", Fields: map[string]storage.Value{"a": {Kind: "text", Data: "x"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "write trigger",
+			m:    storage.Mutation{Kind: "touch", Table: "guarded", Fields: map[string]storage.Value{"v": {Kind: "text", Data: "x"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "unknown column",
+			m:    storage.Mutation{Kind: "touch", Table: "items", Fields: map[string]storage.Value{"bogus": {Kind: "text", Data: "x"}}},
+			want: storage.ErrInvalid,
+		},
+		{
+			name: "missing ETag",
+			m:    storage.Mutation{Kind: "write", Table: "items", Key: row.Key, Fields: map[string]storage.Value{"note": {Kind: "text", Data: "x"}}},
+			want: storage.ErrInvalid,
+		},
+		{
+			name: "constraint violation",
+			m:    storage.Mutation{Kind: "touch", Table: "items", Fields: map[string]storage.Value{"id": {Kind: "integer", Data: "1"}}},
+			want: storage.ErrConstraint,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := st.Write(ctx, func(tx storage.Tx) error {
+				_, err := tx.Apply(ctx, tc.m)
+				return err
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Apply error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteRefusesCascadingForeignKeys is DESIGN §8: an FK action would rewrite
+// rows outside the plan, so it is denied conservatively. NO ACTION and RESTRICT
+// stay allowed.
+func TestWriteRefusesCascadingForeignKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cascade.db")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=rwc")
+	if err != nil {
+		t.Fatalf("open fixture: %v", err)
+	}
+	defer db.Close()
+	const schema = `
+CREATE TABLE parents (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO parents (id, name) VALUES (1, 'root');
+CREATE TABLE children (
+	id INTEGER PRIMARY KEY,
+	parent_id INTEGER REFERENCES parents(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+INSERT INTO children (id, parent_id) VALUES (1, 1);
+CREATE TABLE pinned (
+	id INTEGER PRIMARY KEY,
+	parent_id INTEGER REFERENCES parents(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+);
+INSERT INTO pinned (id, parent_id) VALUES (1, 1);
+CREATE TABLE softened (
+	id INTEGER PRIMARY KEY,
+	parent_id INTEGER DEFAULT NULL REFERENCES parents(id) ON DELETE SET NULL ON UPDATE SET DEFAULT
+);
+INSERT INTO softened (id, parent_id) VALUES (1, 1);
+`
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("create fixture: %v", err)
+	}
+
+	st, err := Open(Options{Path: path, Mode: "rw"})
+	if err != nil {
+		t.Fatalf("Open rw: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ctx := context.Background()
+
+	children := readRow(t, st, "children", 1)
+	pinned := readRow(t, st, "pinned", 1)
+	parents := readRow(t, st, "parents", 1)
+
+	tests := []struct {
+		name string
+		m    storage.Mutation
+		want error
+	}{
+		{
+			name: "touch a child with a cascading foreign key",
+			m:    storage.Mutation{Kind: "touch", Table: "children", Fields: map[string]storage.Value{"parent_id": {Kind: "integer", Data: "1"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "write a child with a cascading foreign key",
+			m:    storage.Mutation{Kind: "write", Table: "children", Key: children.Key, IfMatch: children.ETag, Fields: map[string]storage.Value{"parent_id": {Kind: "integer", Data: "1"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "write a table referenced with cascade",
+			m:    storage.Mutation{Kind: "write", Table: "parents", Key: parents.Key, IfMatch: parents.ETag, Fields: map[string]storage.Value{"name": {Kind: "text", Data: "changed"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "touch a table referenced with cascade",
+			m:    storage.Mutation{Kind: "touch", Table: "parents", Fields: map[string]storage.Value{"name": {Kind: "text", Data: "second"}}},
+		},
+		{
+			name: "touch a child with a set null/default foreign key",
+			m:    storage.Mutation{Kind: "touch", Table: "softened", Fields: map[string]storage.Value{"parent_id": {Kind: "integer", Data: "1"}}},
+			want: storage.ErrUnsupported,
+		},
+		{
+			name: "touch a child with a restrict foreign key",
+			m:    storage.Mutation{Kind: "touch", Table: "pinned", Fields: map[string]storage.Value{"parent_id": {Kind: "integer", Data: "1"}}},
+		},
+		{
+			name: "write a child with a restrict foreign key",
+			m:    storage.Mutation{Kind: "write", Table: "pinned", Key: pinned.Key, IfMatch: pinned.ETag, Fields: map[string]storage.Value{"parent_id": {Kind: "integer", Data: "1"}}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := st.Write(ctx, func(tx storage.Tx) error {
+				_, err := tx.Apply(ctx, tc.m)
+				return err
+			})
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("Apply error = %v, want success", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Apply error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestForeignKeysEnabledOnEveryConnection checks DESIGN §8: the pragma is on for
+// the read transaction and for the dedicated write connection the mutation uses.
+func TestForeignKeysEnabledOnEveryConnection(t *testing.T) {
 	path, _ := openFixture(t)
 	st := openStore(t, path)
-	err := st.Write(context.Background(), func(storage.Tx) error { return nil })
-	if !errors.Is(err, storage.ErrUnsupported) {
-		t.Fatalf("Write error = %v, want storage.ErrUnsupported", err)
+	ctx := context.Background()
+
+	pragma := func(t *testing.T, q queryExecer) int {
+		t.Helper()
+		var n int
+		if err := q.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&n); err != nil {
+			t.Fatalf("read PRAGMA foreign_keys: %v", err)
+		}
+		return n
+	}
+
+	var read int
+	if err := st.Read(ctx, func(rd storage.Reader) error {
+		read = pragma(t, rd.(*reader).q)
+		return nil
+	}); err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+
+	rw, err := Open(Options{Path: path, Mode: "rw"})
+	if err != nil {
+		t.Fatalf("Open rw: %v", err)
+	}
+	t.Cleanup(func() { rw.Close() })
+	var write int
+	if err := rw.Write(ctx, func(tx storage.Tx) error {
+		write = pragma(t, tx.(*reader).q)
+		return nil
+	}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if read != 1 || write != 1 {
+		t.Errorf("foreign_keys read/write connections = %d/%d, want 1/1", read, write)
+	}
+}
+
+func assertNoRow(t *testing.T, st *Store, table string, key storage.Key) {
+	t.Helper()
+	err := st.Read(context.Background(), func(rd storage.Reader) error {
+		_, err := rd.Get(context.Background(), table, key)
+		return err
+	})
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("Get %s %+v error = %v, want storage.ErrNotFound", table, key, err)
 	}
 }
 

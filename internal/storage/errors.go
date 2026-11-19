@@ -17,4 +17,11 @@ var (
 	ErrUnsupported = errors.New("unsupported")
 	// ErrInvalid marks an invalid value the caller can correct.
 	ErrInvalid = errors.New("invalid")
+	// ErrConstraint marks a database constraint the engine enforced.
+	ErrConstraint = errors.New("constraint")
+	// ErrBusy marks lock contention that outlived the busy timeout.
+	ErrBusy = errors.New("busy")
+	// ErrCommitUnknown marks a write whose commit outcome could not be
+	// confirmed; the caller must reconcile by reading the database back.
+	ErrCommitUnknown = errors.New("commit outcome unknown")
 )

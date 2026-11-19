@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"dbvfs/internal/catalog"
 	"dbvfs/internal/cursor"
 	"dbvfs/internal/storage"
@@ -88,17 +86,69 @@ func (s *Store) Read(ctx context.Context, fn func(storage.Reader) error) error {
 	return tx.Commit()
 }
 
-// Write is not part of WP-02; mutations arrive with WP-05.
-func (s *Store) Write(context.Context, func(storage.Tx) error) error {
-	return fmt.Errorf("%w: mutations are not implemented until WP-05", storage.ErrUnsupported)
+// Write runs fn inside one explicit BEGIN IMMEDIATE transaction on a dedicated
+// connection, as DESIGN §8 requires. It never uses sql.Tx: mixing database/sql
+// transactions with manual BEGIN/COMMIT would let the driver commit behind the
+// caller's back. The catalog is revalidated inside the transaction and the
+// foreign_keys guard is verified before it starts.
+func (s *Store) Write(ctx context.Context, fn func(storage.Tx) error) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return classify(fmt.Errorf("acquire write connection: %w", err))
+	}
+	// The transaction outcome is already decided when the connection closes;
+	// a close error cannot change it.
+	defer func() { _ = conn.Close() }()
+
+	var foreignKeys int
+	if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		return fmt.Errorf("check foreign keys: %w", err)
+	}
+	if foreignKeys != 1 {
+		return fmt.Errorf("%w: foreign_keys is not enabled on the write connection", storage.ErrUnsupported)
+	}
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return classify(fmt.Errorf("begin immediate: %w", err))
+	}
+	committed := false
+	// Rollback is best effort by design: if it fails the transaction is gone
+	// with the connection, and the pre-commit error is the one to report.
+	defer func() {
+		if committed {
+			return
+		}
+		_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+	}()
+
+	r := &reader{store: s, q: conn}
+	if err := r.refreshCatalog(ctx); err != nil {
+		return err
+	}
+	if err := fn(r); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("%w: %v; read the database to reconcile", storage.ErrCommitUnknown, err)
+	}
+	committed = true
+	return nil
 }
 
 // Close releases the connection pool.
 func (s *Store) Close() error { return s.db.Close() }
 
+// queryExecer is the subset of *sql.Tx and *sql.Conn the reader needs. Reads
+// pass a transaction; writes pass the dedicated connection.
+type queryExecer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 type reader struct {
 	store   *Store
-	q       *sql.Tx
+	q       queryExecer
 	version int64
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"dbvfs/internal/app"
 	"dbvfs/internal/state"
@@ -15,6 +16,11 @@ import (
 // only place that writes stdout/stderr and the only place that decides the
 // process exit status; main just forwards it to os.Exit.
 func Run(args []string, stdout, stderr io.Writer) int {
+	return run(args, os.Stdin, stdout, stderr)
+}
+
+// run is Run with an injected stdin, so `--data -` is testable without a TTY.
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	inv, err := parse(args)
 	if err != nil {
 		return fail(stdout, stderr, err)
@@ -28,11 +34,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	res, err := execute(inv)
+	// The request ID identifies the audit records too, so it is resolved before
+	// dispatch, not only in the response envelope (DESIGN §10, §11).
+	id, err := requestID(inv.requestID)
 	if err != nil {
 		return fail(stdout, stderr, err)
 	}
-	id, err := requestID(inv.requestID)
+	inv.requestID = id
+	res, err := execute(inv, stdin)
 	if err != nil {
 		return fail(stdout, stderr, err)
 	}
@@ -60,10 +69,12 @@ type result struct {
 
 // execute is the dispatcher. Commands implemented by a later work package keep
 // answering with the standard error envelope.
-func execute(inv *invocation) (result, error) {
+func execute(inv *invocation, stdin io.Reader) (result, error) {
 	switch inv.spec.name {
 	case "cd", "pwd":
 		return executeSession(inv)
+	case "touch", "write":
+		return executeMutation(inv, stdin)
 	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat",
 		"find", "grep", "export":
 		return executeRead(inv)
@@ -71,8 +82,8 @@ func execute(inv *invocation) (result, error) {
 	return result{}, codedError(CodeUnsupported, "%s is not implemented until %s", inv.spec.name, inv.spec.wp)
 }
 
-// newService wires the config directory, the sessions directory and the
-// operation deadline into the application layer.
+// newService wires the config directory, the sessions and audit directories and
+// the operation deadline into the application layer.
 func newService(inv *invocation) (app.Service, error) {
 	dir, err := state.Dir()
 	if err != nil {
@@ -82,7 +93,11 @@ func newService(inv *invocation) (app.Service, error) {
 	if err != nil {
 		return app.Service{}, err
 	}
-	return app.Service{ConfigDir: dir, StateDir: sessions, Timeout: inv.timeout}, nil
+	auditDir, err := state.StateDir()
+	if err != nil {
+		return app.Service{}, err
+	}
+	return app.Service{ConfigDir: dir, StateDir: sessions, AuditDir: auditDir, Timeout: inv.timeout}, nil
 }
 
 // resolvePath turns a deferred relative path into a VFS path using the

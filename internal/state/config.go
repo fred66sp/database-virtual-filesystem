@@ -1,6 +1,6 @@
 // Package state owns the local state from DESIGN §9: the operator-editable
-// mount registry in $XDG_CONFIG_HOME/db-ai/config.json and explicit session
-// files in $XDG_STATE_HOME/db-ai/sessions. The audit log belongs to WP-04.
+// mount registry in $XDG_CONFIG_HOME/db-ai/config.json, explicit session files
+// in $XDG_STATE_HOME/db-ai/sessions and the audit log in the state directory.
 package state
 
 import (

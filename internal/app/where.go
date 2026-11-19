@@ -128,5 +128,5 @@ func jsonValue(v any) (storage.Value, error) {
 		}
 		return storage.Value{Kind: "real", Data: strconv.FormatFloat(f, 'g', -1, 64)}, nil
 	}
-	return storage.Value{}, fmt.Errorf("%w: --where supports only scalar JSON values", storage.ErrInvalid)
+	return storage.Value{}, fmt.Errorf("%w: only scalar JSON values are supported", storage.ErrInvalid)
 }

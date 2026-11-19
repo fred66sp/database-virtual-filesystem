@@ -88,6 +88,12 @@ func CodedError(err error) *Error {
 		return &Error{Code: CodeDenied, Message: err.Error(), Err: err}
 	case errors.Is(err, storage.ErrConflict):
 		return &Error{Code: CodeConflict, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrConstraint):
+		return &Error{Code: CodeConstraint, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrBusy):
+		return &Error{Code: CodeBusy, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrCommitUnknown):
+		return &Error{Code: CodeCommitUnknown, Message: err.Error(), Err: err}
 	case errors.Is(err, storage.ErrUnsupported):
 		return &Error{Code: CodeUnsupported, Message: err.Error(), Err: err}
 	case errors.Is(err, context.DeadlineExceeded):

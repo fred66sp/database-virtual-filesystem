@@ -60,7 +60,7 @@ func TestRunGolden(t *testing.T) {
 		{"non-canonical escape", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden", true},
 		{"empty segment", []string{"cat", "/work//tasks"}, 2, "error_empty_segment.golden", true},
 		{"unsupported batch", []string{"batch", "--data", "-"}, 8, "error_unsupported_batch.golden", true},
-		{"unsupported touch", []string{"touch", "/work/tasks", "--data", "{}"}, 8, "error_unsupported_touch.golden", true},
+		{"touch without mount", []string{"touch", "/work/tasks", "--data", "{}"}, 3, "error_find_no_mount.golden", true},
 		{"find without mount", []string{"find", "/work/tasks"}, 3, "error_find_no_mount.golden", true},
 		{"json flag accepted", []string{"--json", "find", "/work/tasks"}, 3, "error_find_no_mount.golden", true},
 		{"rm without apply", []string{"rm", "/work/tasks/TK-001", "--if-match", "sha256:abc"}, 2, "error_missing_apply.golden", true},
@@ -368,7 +368,7 @@ func TestBinary(t *testing.T) {
 	}{
 		{"help", []string{"--help"}, 0, "help_root.golden"},
 		{"usage error", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden"},
-		{"unsupported", []string{"touch", "/work/tasks", "--data", "{}"}, 8, "error_unsupported_touch.golden"},
+		{"unsupported", []string{"batch", "--data", "-"}, 8, "error_unsupported_batch.golden"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
