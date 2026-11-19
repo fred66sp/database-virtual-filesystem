@@ -48,7 +48,7 @@ type treeData struct {
 	Entries []treeEntry `json:"entries"`
 }
 
-type rowData struct {
+type RowData struct {
 	Path   string                   `json:"path"`
 	Fields map[string]storage.Value `json:"fields"`
 	ETag   string                   `json:"etag"`
@@ -614,6 +614,21 @@ func (s Service) Cat(ctx context.Context, p vfs.Path) (any, error) {
 		return nil, fmt.Errorf("%w: cat needs a row or field path", storage.ErrUnsupported)
 	}
 
+	path, err := p.Canonical()
+	if err != nil {
+		return nil, err
+	}
+	m, err := s.mount(p.Alias)
+	if err != nil {
+		return nil, err
+	}
+	if !readOpAllowed(m, "cat", path) {
+		if p.Kind == vfs.KindField {
+			return nil, policyDenied("cat", p.Field, path)
+		}
+		return nil, policyDenied("cat", "row", path)
+	}
+
 	st, err := s.open(p.Alias)
 	if err != nil {
 		return nil, err
@@ -642,11 +657,7 @@ func (s Service) Cat(ctx context.Context, p vfs.Path) (any, error) {
 			data = value
 			return nil
 		}
-		path, err := pathString(vfs.Path{Kind: vfs.KindRow, Alias: p.Alias, Table: t.Name, Key: row.Key})
-		if err != nil {
-			return err
-		}
-		data = rowData{Path: path, Fields: fieldMap(row), ETag: row.ETag}
+		data = RowData{Path: path, Fields: fieldMap(row), ETag: row.ETag}
 		return nil
 	})
 	return data, err

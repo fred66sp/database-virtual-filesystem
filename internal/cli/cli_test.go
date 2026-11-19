@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
@@ -58,10 +59,10 @@ func TestRunGolden(t *testing.T) {
 		{"nul path", []string{"cat", "/work/tasks/\x00"}, 2, "error_nul_path.golden", true},
 		{"non-canonical escape", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden", true},
 		{"empty segment", []string{"cat", "/work//tasks"}, 2, "error_empty_segment.golden", true},
-		{"unsupported find", []string{"find", "/work/tasks"}, 8, "error_unsupported_find.golden", true},
 		{"unsupported batch", []string{"batch", "--data", "-"}, 8, "error_unsupported_batch.golden", true},
 		{"unsupported touch", []string{"touch", "/work/tasks", "--data", "{}"}, 8, "error_unsupported_touch.golden", true},
-		{"json flag accepted", []string{"--json", "find", "/work/tasks"}, 8, "error_unsupported_find.golden", true},
+		{"find without mount", []string{"find", "/work/tasks"}, 3, "error_find_no_mount.golden", true},
+		{"json flag accepted", []string{"--json", "find", "/work/tasks"}, 3, "error_find_no_mount.golden", true},
 		{"rm without apply", []string{"rm", "/work/tasks/TK-001", "--if-match", "sha256:abc"}, 2, "error_missing_apply.golden", true},
 		{"dry-run with apply", []string{"rm", "/work/tasks/TK-001", "--if-match", "sha256:abc", "--apply", "--dry-run"}, 2, "error_dry_run_apply.golden", true},
 		{"limit too high", []string{"ls", "/work", "--limit", "1001"}, 8, "error_limit.golden", true},
@@ -180,6 +181,20 @@ func TestParseDetails(t *testing.T) {
 		t.Errorf("args after -- = %q, want the literal text", inv.args)
 	}
 
+	if inv, err = parse([]string{"ls", "tasks", "--session", "s1"}); err != nil {
+		t.Fatalf("parse(ls relative): %v", err)
+	}
+	if !inv.pathRelative || inv.pathRaw != "tasks" || inv.path != nil {
+		t.Errorf("relative path invocation = %+v, want a deferred resolution", inv)
+	}
+
+	if inv, err = parse([]string{"ls", "--session", "s1"}); err != nil {
+		t.Fatalf("parse(ls with session): %v", err)
+	}
+	if !inv.pathFromCwd || inv.path != nil {
+		t.Errorf("optional path invocation = %+v, want the cwd to stand in", inv)
+	}
+
 	if inv, err = parse([]string{"-h"}); err != nil || !inv.help || inv.spec != nil {
 		t.Errorf("parse(-h) = %+v, %v; want root help", inv, err)
 	}
@@ -213,8 +228,7 @@ func TestParseRejects(t *testing.T) {
 		{"alias relative", []string{"umount", "w"}, CodeUsage},
 		{"apply on ls", []string{"ls", "/w", "--apply"}, CodeUsage},
 		{"dry-run on ls", []string{"ls", "/w", "--dry-run"}, CodeUsage},
-		{"relative path with session", []string{"ls", "tasks", "--session", "s1"}, CodeUnsupported},
-		{"optional path with session", []string{"ls", "--session", "s1"}, CodeUnsupported},
+		{"invalid session id", []string{"cd", "/w", "--session", "bad/id"}, CodeUsage},
 	}
 
 	for _, tc := range tests {
@@ -354,7 +368,7 @@ func TestBinary(t *testing.T) {
 	}{
 		{"help", []string{"--help"}, 0, "help_root.golden"},
 		{"usage error", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden"},
-		{"unsupported", []string{"find", "/work/tasks"}, 8, "error_unsupported_find.golden"},
+		{"unsupported", []string{"touch", "/work/tasks", "--data", "{}"}, 8, "error_unsupported_touch.golden"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

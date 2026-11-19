@@ -22,6 +22,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"dbvfs/internal/catalog"
+	"dbvfs/internal/cursor"
 	"dbvfs/internal/storage"
 )
 
@@ -175,21 +176,13 @@ func (r *reader) List(ctx context.Context, q storage.Query) ([]storage.Row, stri
 	if err != nil {
 		return nil, "", err
 	}
-	if len(q.Filters) > 0 {
-		return nil, "", fmt.Errorf("%w: filters are not implemented until WP-03", storage.ErrUnsupported)
-	}
-	if q.Cursor != "" {
-		return nil, "", fmt.Errorf("%w: cursors are not implemented until WP-03", storage.ErrUnsupported)
-	}
 	if len(q.Projection) > 0 {
-		return nil, "", fmt.Errorf("%w: projections are not implemented until WP-03", storage.ErrUnsupported)
+		return nil, "", fmt.Errorf("%w: projections are not implemented", storage.ErrUnsupported)
 	}
 
 	order := q.Order
 	if len(order) == 0 {
-		for _, c := range t.PrimaryKey() {
-			order = append(order, storage.OrderSpec{Column: c.Name})
-		}
+		order = storage.DefaultOrder(t.Table)
 	}
 	if len(order) == 0 {
 		return nil, "", fmt.Errorf("%w: table %q has no stable order", storage.ErrUnsupported, q.Table)
@@ -199,12 +192,52 @@ func (r *reader) List(ctx context.Context, q storage.Query) ([]storage.Row, stri
 		return nil, "", err
 	}
 
+	var where []string
+	var args []any
+	for _, f := range q.Filters {
+		cond, filterArgs, err := filterCondition(f, t)
+		if err != nil {
+			return nil, "", err
+		}
+		where = append(where, cond)
+		args = append(args, filterArgs...)
+	}
+	if q.Search != nil {
+		cond, searchArgs, err := searchCondition(q.Search, t)
+		if err != nil {
+			return nil, "", err
+		}
+		where = append(where, cond)
+		args = append(args, searchArgs...)
+	}
+	if q.Cursor != "" {
+		last, err := cursor.DecodeKey(q.Cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		if len(last) != len(order) {
+			return nil, "", fmt.Errorf("%w: cursor has %d values for %d order columns", storage.ErrInvalid, len(last), len(order))
+		}
+		cond, cursorArgs, err := keysetCondition(order, last)
+		if err != nil {
+			return nil, "", err
+		}
+		where = append(where, cond)
+		args = append(args, cursorArgs...)
+	}
+
 	limit := q.Limit
 	if limit <= 0 {
 		limit = 1000
 	}
-	query := "SELECT " + columnList(t.Columns) + " FROM " + quoteIdent(t.Name) + " ORDER BY " + orderBy + " LIMIT ?"
-	rows, err := r.q.QueryContext(ctx, query, limit)
+	query := "SELECT " + columnList(t.Columns) + " FROM " + quoteIdent(t.Name)
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY " + orderBy + " LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := r.q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("list %q: %w", q.Table, err)
 	}
@@ -225,9 +258,88 @@ func (r *reader) List(ctx context.Context, q storage.Query) ([]storage.Row, stri
 	if err := rows.Err(); err != nil {
 		return nil, "", fmt.Errorf("list %q: %w", q.Table, err)
 	}
-	// WP-02 has no keyset cursor; an empty next cursor means "no token to
-	// resume from", and callers detect truncation by asking for limit+1.
+	// The next position is not decided here: the application signs a cursor
+	// only when it knows the policy allows another page (DESIGN §7).
 	return out, "", nil
+}
+
+// filterCondition renders one typed filter with every value bound (NFR-02).
+func filterCondition(f storage.Filter, t *catalog.Table) (string, []any, error) {
+	if !t.HasColumn(f.Column) {
+		return "", nil, fmt.Errorf("%w: unknown filter column %q", storage.ErrInvalid, f.Column)
+	}
+	col := quoteIdent(f.Column)
+	switch f.Op {
+	case "is-null":
+		return col + " IS NULL", nil, nil
+	case "not-null":
+		return col + " IS NOT NULL", nil, nil
+	case "=", "!=", "<", "<=", ">", ">=":
+		if f.Value.Kind == "null" {
+			if f.Op == "=" {
+				return col + " IS NULL", nil, nil
+			}
+			if f.Op == "!=" {
+				return col + " IS NOT NULL", nil, nil
+			}
+			return "", nil, fmt.Errorf("%w: operator %q cannot compare against null", storage.ErrInvalid, f.Op)
+		}
+		arg, err := bindValue(f.Value)
+		if err != nil {
+			return "", nil, err
+		}
+		return col + " " + f.Op + " ?", []any{arg}, nil
+	}
+	return "", nil, fmt.Errorf("%w: unknown filter operator %q", storage.ErrInvalid, f.Op)
+}
+
+// searchCondition renders literal substring matching with instr (DESIGN §7).
+// It is case-sensitive and uses no FTS tables.
+func searchCondition(s *storage.Search, t *catalog.Table) (string, []any, error) {
+	if len(s.Columns) == 0 {
+		return "", nil, fmt.Errorf("%w: grep needs at least one TEXT column", storage.ErrUnsupported)
+	}
+	parts := make([]string, len(s.Columns))
+	args := make([]any, len(s.Columns))
+	for i, c := range s.Columns {
+		if !t.HasColumn(c) {
+			return "", nil, fmt.Errorf("%w: unknown search column %q", storage.ErrInvalid, c)
+		}
+		parts[i] = "instr(" + quoteIdent(c) + ", ?) > 0"
+		args[i] = s.Text
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args, nil
+}
+
+// keysetCondition is the strict "tuple after last" predicate for keyset
+// pagination. It supports mixed directions because OrderSpec carries Desc.
+// orderClause has already validated every column.
+func keysetCondition(order []storage.OrderSpec, last storage.Key) (string, []any, error) {
+	parts := make([]string, 0, len(order))
+	var args []any
+	for i := range order {
+		conds := make([]string, 0, i+1)
+		for j := 0; j < i; j++ {
+			arg, err := bindValue(last[j])
+			if err != nil {
+				return "", nil, err
+			}
+			conds = append(conds, quoteIdent(order[j].Column)+" = ?")
+			args = append(args, arg)
+		}
+		arg, err := bindValue(last[i])
+		if err != nil {
+			return "", nil, err
+		}
+		cmp := ">"
+		if order[i].Desc {
+			cmp = "<"
+		}
+		conds = append(conds, quoteIdent(order[i].Column)+" "+cmp+" ?")
+		args = append(args, arg)
+		parts = append(parts, "("+strings.Join(conds, " AND ")+")")
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args, nil
 }
 
 func (s *Store) snapshot() []catalog.Table {
@@ -358,11 +470,19 @@ func bindValue(v storage.Value) (any, error) {
 
 func orderClause(order []storage.OrderSpec, t *catalog.Table) (string, error) {
 	parts := make([]string, len(order))
+	// Tables without a primary key have no keyset, so forcing BINARY here
+	// cannot disagree with a cursor predicate; it makes their first page
+	// independent of any declared column collation (D-12).
+	forceBinary := len(t.PrimaryKey()) == 0
 	for i, spec := range order {
 		found := false
+		collate := ""
 		for _, c := range t.Columns {
 			if c.Name == spec.Column {
 				found = true
+				if forceBinary && catalog.Affinity(c.DeclaredType) == "TEXT" {
+					collate = " COLLATE BINARY"
+				}
 				break
 			}
 		}
@@ -373,7 +493,7 @@ func orderClause(order []storage.OrderSpec, t *catalog.Table) (string, error) {
 		if spec.Desc {
 			dir = " DESC"
 		}
-		parts[i] = quoteIdent(spec.Column) + dir
+		parts[i] = quoteIdent(spec.Column) + collate + dir
 	}
 	return strings.Join(parts, ", "), nil
 }

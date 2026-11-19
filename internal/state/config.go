@@ -1,10 +1,11 @@
-// Package state owns the operator-editable local configuration from DESIGN §9:
-// the mount registry stored at $XDG_CONFIG_HOME/db-ai/config.json. Sessions and
-// the audit log belong to later work packages.
+// Package state owns the local state from DESIGN §9: the operator-editable
+// mount registry in $XDG_CONFIG_HOME/db-ai/config.json and explicit session
+// files in $XDG_STATE_HOME/db-ai/sessions. The audit log belongs to WP-04.
 package state
 
 import (
-	"dbvfs/internal/vfs"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"dbvfs/internal/vfs"
 )
 
 // Version is the only config schema this build accepts.
@@ -21,8 +24,8 @@ const Version = 1
 // or an unknown version). Callers classify it once, at the CLI frontier.
 var ErrInvalid = errors.New("invalid config")
 
-// Policy is one operator-written allow entry. WP-02 stores it verbatim; the
-// policy engine that reads it arrives with WP-04.
+// Policy is one operator-written allow entry. WP-03 applies it to the read
+// side; WP-04 completes the policy engine for writes and listings.
 type Policy struct {
 	Ops    []string `json:"ops"`
 	Prefix string   `json:"prefix"`
@@ -36,10 +39,12 @@ type Mount struct {
 	Allow []Policy `json:"allow,omitempty"`
 }
 
-// Config is config.json. Mounts is never nil after Load.
+// Config is config.json. Mounts is never nil after Load. CursorKey is the HMAC
+// key for pagination cursors (DESIGN §7); it is generated on first use.
 type Config struct {
-	Version int              `json:"version"`
-	Mounts  map[string]Mount `json:"mounts"`
+	Version   int              `json:"version"`
+	Mounts    map[string]Mount `json:"mounts"`
+	CursorKey string           `json:"cursor_key,omitempty"`
 }
 
 // Dir returns the db-ai configuration directory: $XDG_CONFIG_HOME/db-ai with
@@ -119,6 +124,41 @@ func (c Config) Aliases() []string {
 	}
 	sort.Strings(aliases)
 	return aliases
+}
+
+// CursorKey returns the HMAC key for pagination cursors (DESIGN §7). The key
+// is generated once and persisted in config.json so cursors stay verifiable
+// across invocations; it is operator configuration, not session state.
+func CursorKey(dir string) ([]byte, error) {
+	cfg, err := Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.CursorKey != "" {
+		return decodeCursorKey(cfg.CursorKey)
+	}
+	var key []byte
+	err = Update(dir, func(c *Config) error {
+		if c.CursorKey == "" {
+			var b [32]byte
+			if _, err := rand.Read(b[:]); err != nil {
+				return fmt.Errorf("generate cursor key: %w", err)
+			}
+			c.CursorKey = base64.RawURLEncoding.EncodeToString(b[:])
+		}
+		var err error
+		key, err = decodeCursorKey(c.CursorKey)
+		return err
+	})
+	return key, err
+}
+
+func decodeCursorKey(encoded string) ([]byte, error) {
+	key, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil || len(key) != 32 {
+		return nil, fmt.Errorf("%w: cursor_key must be base64url of exactly 32 bytes", ErrInvalid)
+	}
+	return key, nil
 }
 
 func save(dir string, cfg Config) error {

@@ -56,6 +56,16 @@ type Table struct {
 // columns themselves.
 func (t Table) PrimaryKey() []Column { return PKColumns(t.Columns) }
 
+// HasColumn reports whether the table has a column with this exact name.
+func (t Table) HasColumn(name string) bool {
+	for _, c := range t.Columns {
+		if c.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // PKColumns filters columns to the primary-key ones, ordered by PKOrder.
 func PKColumns(cols []Column) []Column {
 	pk := make([]Column, 0, len(cols))
@@ -80,6 +90,29 @@ type OrderSpec struct {
 	Desc   bool
 }
 
+// DefaultOrder is explicit and total: the primary key for addressable tables,
+// every column for tables without a stable identity (DESIGN §7).
+func DefaultOrder(t Table) []OrderSpec {
+	order := make([]OrderSpec, 0, len(t.Columns))
+	for _, c := range t.PrimaryKey() {
+		order = append(order, OrderSpec{Column: c.Name})
+	}
+	if len(order) > 0 {
+		return order
+	}
+	for _, c := range t.Columns {
+		order = append(order, OrderSpec{Column: c.Name})
+	}
+	return order
+}
+
+// Search is a literal, case-sensitive substring match across the listed TEXT
+// columns. It is how grep reaches the adapter; it is never raw SQL.
+type Search struct {
+	Text    string
+	Columns []string
+}
+
 // Query describes a bounded read.
 type Query struct {
 	Table      string
@@ -88,6 +121,7 @@ type Query struct {
 	Order      []OrderSpec
 	Limit      int
 	Cursor     string
+	Search     *Search
 }
 
 // Mutation describes a single write.

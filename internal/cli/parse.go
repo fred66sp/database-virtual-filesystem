@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"dbvfs/internal/state"
 	"dbvfs/internal/vfs"
 )
 
@@ -25,6 +26,14 @@ type invocation struct {
 	path  *vfs.Path
 	dest  *vfs.Path
 	alias string
+
+	// A relative path (or an omitted path with a session) is resolved against
+	// the session's cwd by the application layer, before dispatch.
+	pathRaw      string
+	pathRelative bool
+	pathFromCwd  bool
+	destRaw      string
+	destRelative bool
 
 	json    bool
 	session string
@@ -234,6 +243,9 @@ func (inv *invocation) validate(pos []string, seen map[string]bool) error {
 	if spec.requireSess && inv.session == "" {
 		return usageError("%s requires --session", spec.name)
 	}
+	if inv.session != "" && !state.ValidSessionID(inv.session) {
+		return usageError("--session must be ASCII [A-Za-z0-9._-]+")
+	}
 	if spec.name == "mount" && inv.mode == "" {
 		inv.mode = "ro"
 	}
@@ -245,26 +257,19 @@ func (inv *invocation) validate(pos []string, seen map[string]bool) error {
 		if i >= len(pos) {
 			if role == argOptionalPath {
 				if inv.session != "" {
-					return codedError(CodeUnsupported, "resolving the session working directory is not implemented until WP-03")
+					inv.pathFromCwd = true
+				} else {
+					root := vfs.Path{Kind: vfs.KindRoot}
+					inv.path = &root
 				}
-				root := vfs.Path{Kind: vfs.KindRoot}
-				inv.path = &root
 			}
 			continue
 		}
 		switch role {
-		case argPath, argOptionalPath:
-			p, err := parsePath(pos[i], inv.session)
-			if err != nil {
+		case argPath, argOptionalPath, argDestPath:
+			if err := inv.setPath(role, pos[i]); err != nil {
 				return err
 			}
-			inv.path = &p
-		case argDestPath:
-			p, err := parsePath(pos[i], inv.session)
-			if err != nil {
-				return err
-			}
-			inv.dest = &p
 		case argAlias:
 			alias, err := parseAlias(pos[i])
 			if err != nil {
@@ -276,19 +281,33 @@ func (inv *invocation) validate(pos []string, seen map[string]bool) error {
 	return nil
 }
 
-// parsePath validates one VFS argument. Without a session a relative path is a
-// usage error; with a session it is legal but needs session state (WP-03).
-func parsePath(raw, session string) (vfs.Path, error) {
+// setPath accepts an absolute path now and defers a relative one until the
+// session cwd is known. Without --session a relative path is a usage error.
+func (inv *invocation) setPath(role argRole, raw string) error {
 	if raw == "" {
-		return vfs.Path{}, usageError("path is empty")
+		return usageError("path is empty")
 	}
 	if !strings.HasPrefix(raw, "/") {
-		if session == "" {
-			return vfs.Path{}, usageError("relative path %q requires --session", raw)
+		if inv.session == "" {
+			return usageError("relative path %q requires --session", raw)
 		}
-		return vfs.Path{}, codedError(CodeUnsupported, "relative path resolution is not implemented until WP-03")
+		if role == argDestPath {
+			inv.destRaw, inv.destRelative = raw, true
+		} else {
+			inv.pathRaw, inv.pathRelative = raw, true
+		}
+		return nil
 	}
-	return vfs.Parse(raw)
+	p, err := vfs.Parse(raw)
+	if err != nil {
+		return err
+	}
+	if role == argDestPath {
+		inv.dest = &p
+	} else {
+		inv.path = &p
+	}
+	return nil
 }
 
 func parseAlias(raw string) (string, error) {
