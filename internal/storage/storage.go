@@ -3,7 +3,10 @@
 // DESIGN §6 verbatim; implementations live in later work packages.
 package storage
 
-import "context"
+import (
+	"context"
+	"sort"
+)
 
 // Value is a typed value. Kind is one of null, integer, real, text or blob and
 // Data is its canonical representation (DESIGN §10).
@@ -46,6 +49,23 @@ type Table struct {
 	Name                          string
 	Columns                       []Column
 	Readable, Writable, Navigable bool
+}
+
+// PrimaryKey returns the primary-key columns in key order. It is the single
+// definition of row identity order; adapters and handlers must not re-sort
+// columns themselves.
+func (t Table) PrimaryKey() []Column { return PKColumns(t.Columns) }
+
+// PKColumns filters columns to the primary-key ones, ordered by PKOrder.
+func PKColumns(cols []Column) []Column {
+	pk := make([]Column, 0, len(cols))
+	for _, c := range cols {
+		if c.PKOrder > 0 {
+			pk = append(pk, c)
+		}
+	}
+	sort.Slice(pk, func(i, j int) bool { return pk[i].PKOrder < pk[j].PKOrder })
+	return pk
 }
 
 // Filter is one comparison against a column.

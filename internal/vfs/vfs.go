@@ -167,6 +167,13 @@ func decodeAlias(raw string) (string, error) {
 	return alias, nil
 }
 
+// ValidAlias reports whether alias is a legal mount alias (DESIGN §4: ASCII
+// [A-Za-z0-9_-]+). The registry uses it to enforce the same rule as the path
+// codec.
+func ValidAlias(alias string) bool {
+	return checkAlias(alias) == nil
+}
+
 // checkAlias enforces DESIGN §4: ASCII [A-Za-z0-9_-]+.
 func checkAlias(alias string) error {
 	if alias == "" {

@@ -1,0 +1,29 @@
+//go:build unix
+
+package state
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
+)
+
+// acquireLock serializes config updates across processes with flock, which the
+// kernel releases if the process dies. The lock lives in its own file because
+// the config itself is replaced by rename.
+func acquireLock(dir string) (func(), error) {
+	path := filepath.Join(dir, "config.lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open config lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("lock config: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
+}

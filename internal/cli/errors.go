@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"dbvfs/internal/state"
+	"dbvfs/internal/storage"
 	"dbvfs/internal/vfs"
 )
 
@@ -76,17 +78,32 @@ func CodedError(err error) *Error {
 		return coded
 	}
 	switch {
-	case errors.Is(err, vfs.ErrInvalidPath):
+	case errors.Is(err, vfs.ErrInvalidPath), errors.Is(err, storage.ErrInvalid), errors.Is(err, state.ErrInvalid):
 		return &Error{Code: CodeUsage, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrNotFound), errors.Is(err, os.ErrNotExist):
+		return &Error{Code: CodeNotFound, Message: notFoundMessage(err), Err: err}
+	case errors.Is(err, storage.ErrDenied):
+		return &Error{Code: CodeDenied, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrConflict):
+		return &Error{Code: CodeConflict, Message: err.Error(), Err: err}
+	case errors.Is(err, storage.ErrUnsupported):
+		return &Error{Code: CodeUnsupported, Message: err.Error(), Err: err}
 	case errors.Is(err, context.DeadlineExceeded):
 		return &Error{Code: CodeTimeout, Message: "operation timed out", Err: err}
-	case errors.Is(err, os.ErrNotExist):
-		return &Error{Code: CodeNotFound, Message: "resource not found", Err: err}
 	case errors.Is(err, context.Canceled):
 		// DESIGN §10 has no cancellation exit group, so it stays internal.
 		return &Error{Code: CodeInternal, Message: "operation canceled", Err: err}
 	}
 	return &Error{Code: CodeInternal, Message: "internal error", Err: err}
+}
+
+// notFoundMessage keeps the classification-specific message when one exists and
+// falls back to the generic text for bare os.ErrNotExist values.
+func notFoundMessage(err error) string {
+	if errors.Is(err, storage.ErrNotFound) {
+		return err.Error()
+	}
+	return "resource not found"
 }
 
 func usageError(format string, args ...any) *Error {

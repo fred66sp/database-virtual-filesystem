@@ -16,9 +16,6 @@ import (
 	"dbvfs/internal/vfs"
 )
 
-// composite is the canonical composite key segment from DESIGN §4.
-const composite = "~kW3sia2luZCI6InRleHQiLCJkYXRhIjoiYSJ9LHsia2luZCI6ImludGVnZXIiLCJkYXRhIjoiNDIifV0"
-
 // envelopeView is the shape a consumer parses; the tests check it independently
 // of the production types.
 type envelopeView struct {
@@ -28,6 +25,17 @@ type envelopeView struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "db-ai-config")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("XDG_CONFIG_HOME", dir)
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
 }
 
 func TestRunGolden(t *testing.T) {
@@ -50,10 +58,10 @@ func TestRunGolden(t *testing.T) {
 		{"nul path", []string{"cat", "/work/tasks/\x00"}, 2, "error_nul_path.golden", true},
 		{"non-canonical escape", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden", true},
 		{"empty segment", []string{"cat", "/work//tasks"}, 2, "error_empty_segment.golden", true},
-		{"unsupported ls", []string{"ls", "/work"}, 8, "error_unsupported_ls.golden", true},
+		{"unsupported find", []string{"find", "/work/tasks"}, 8, "error_unsupported_find.golden", true},
 		{"unsupported batch", []string{"batch", "--data", "-"}, 8, "error_unsupported_batch.golden", true},
-		{"unsupported composite cat", []string{"cat", "/work/tasks/" + composite}, 8, "error_unsupported_cat.golden", true},
-		{"json flag accepted", []string{"--json", "ls", "/work"}, 8, "error_unsupported_ls.golden", true},
+		{"unsupported touch", []string{"touch", "/work/tasks", "--data", "{}"}, 8, "error_unsupported_touch.golden", true},
+		{"json flag accepted", []string{"--json", "find", "/work/tasks"}, 8, "error_unsupported_find.golden", true},
 		{"rm without apply", []string{"rm", "/work/tasks/TK-001", "--if-match", "sha256:abc"}, 2, "error_missing_apply.golden", true},
 		{"dry-run with apply", []string{"rm", "/work/tasks/TK-001", "--if-match", "sha256:abc", "--apply", "--dry-run"}, 2, "error_dry_run_apply.golden", true},
 		{"limit too high", []string{"ls", "/work", "--limit", "1001"}, 8, "error_limit.golden", true},
@@ -346,7 +354,7 @@ func TestBinary(t *testing.T) {
 	}{
 		{"help", []string{"--help"}, 0, "help_root.golden"},
 		{"usage error", []string{"cat", "/work/tasks/a%2fb"}, 2, "error_noncanonical_escape.golden"},
-		{"unsupported", []string{"ls", "/work"}, 8, "error_unsupported_ls.golden"},
+		{"unsupported", []string{"find", "/work/tasks"}, 8, "error_unsupported_find.golden"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
