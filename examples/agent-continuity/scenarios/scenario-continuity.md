@@ -10,18 +10,18 @@ skill `db-ai` de SKILLS-AGP (`SKILL.md` y `references/`). Este escenario no
 reproduce esa skill: la usa.
 
 Para repetirlo desde cero, elimina `.agent-memory/` y vuelve a ejecutar
-`bash init.sh`. El borrado es una operación del operador fuera de db-ai; la
-política deniega `rm`.
+`bash init.sh --demo`. El borrado es una operación del operador fuera de db-ai;
+la política deniega `rm`.
 
 ## Preparación (una vez)
 
 ```bash
-bash init.sh
+bash init.sh --demo
 db-ai mounts
 ```
 
 Esperado: `mounts` incluye `{"alias":"mem", ... "mode":"rw"}` y la base contiene
-el seed de demostración.
+el fixture de demostración que aporta `--demo`.
 
 ## Agente A: abrir sesión
 

@@ -12,8 +12,8 @@ directorio del escenario.
 TMP=$(mktemp -d)
 export XDG_CONFIG_HOME=$TMP/config
 
-ACM_HOME=$TMP/proyecto-a ACM_ALIAS=mem-a bash init.sh
-ACM_HOME=$TMP/proyecto-b ACM_ALIAS=mem-b bash init.sh
+ACM_HOME=$TMP/proyecto-a ACM_ALIAS=mem-a bash init.sh --demo
+ACM_HOME=$TMP/proyecto-b ACM_ALIAS=mem-b bash init.sh --demo
 ```
 
 Esperado: dos inicializaciones con `ok` en su verificación final, con bases y
