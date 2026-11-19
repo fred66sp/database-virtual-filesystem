@@ -1,0 +1,20 @@
+# database-virtual-filesystem (db-ai)
+
+> Herramienta CLI agent-first que proporciona acceso a bases de datos mediante la
+> semántica operativa de los sistemas de archivos. Los contratos funcional (PRD) y
+> técnico (DESIGN) son las fuentes; este fichero solo enlaza y no duplica descripciones.
+
+## Documentación
+
+- [PRD — contrato funcional](docs/PRD.md)
+- [DESIGN — contrato técnico](docs/DESIGN.md)
+- [README del proyecto](README.md)
+- [Política Git y contribución](CONTRIBUTING.md)
+- [Registro de cambios](CHANGELOG.md)
+- [Mapa del repositorio para agentes](AGENTS.md)
+
+## Sistema de trabajo
+
+- [`.tasks-ai/AGENTS.md`](.tasks-ai/AGENTS.md) — contrato del tablero de tareas
+- [`.tasks-ai/CONTRATO_ETIQUETAS.md`](.tasks-ai/CONTRATO_ETIQUETAS.md) — tipos, estructura y catálogo de etiquetas
+- [`opencode.jsonc`](opencode.jsonc) — plugins de OpenCode del proyecto

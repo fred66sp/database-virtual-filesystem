@@ -1,0 +1,56 @@
+# database-virtual-filesystem (db-ai) — ignore rules
+#
+# Cuatro capas, en este orden: ruido de SO y editor, artefactos de compilación,
+# estado local de herramientas de IA y secretos. Los contratos (docs/) y el
+# sistema de trabajo (CONTRIBUTING.md, CHANGELOG.md, .tasks-ai versionado)
+# se quedan versionados porque son el producto.
+
+# --- Ruido de SO --------------------------------------------------------------
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# --- Editor e IDE -------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Compilación Go (cuando haya código) ---------------------------------------
+# El binario db-ai y los artefactos de build no se versionan.
+bin/
+dist/
+*.test
+*.out
+
+# --- Dependencias de Node ------------------------------------------------------
+**/node_modules/
+
+# --- Estado local de herramientas de IA ---------------------------------------
+.atl/
+.codegraph/
+.engram/
+.explanations/
+.impeccable/
+.pi/
+.playwright-cli/
+.skills/
+
+# --- Tablero tasks-ai ----------------------------------------------------------
+# El estado, el binario incrustado y la extensión quedan fuera; las instrucciones,
+# el contrato de etiquetas y los ajustes sí se versionan, como en tasks-ai. En .run/
+# viven el estado del orquestador y los registros de los servidores locales.
+.tasks-ai/tasks.db
+.tasks-ai/tasks.db-wal
+.tasks-ai/tasks.db-shm
+.tasks-ai/bin/
+.tasks-ai/extensions/
+.run/
+
+# --- Secretos y ficheros con claves -------------------------------------------
+# Las credenciales de bases de datos nunca se versionan.
+*.pem
+*.key
+.env
+.env.*
