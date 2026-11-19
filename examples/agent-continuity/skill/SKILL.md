@@ -45,23 +45,29 @@ servidor: compone SQLite, la CLI `db-ai` y esta skill.
    vencido, informa y propón `needs_review` a la persona. Es la opción
    conservadora adoptada mientras el PRD §14 no fije otra.
 6. **Contexto acotado.** Usa páginas cortas, lee el campo después de localizar la
-   fila y no exportes tablas para responder una pregunta.
+   fila y no exportes tablas para responder una pregunta. El checkpoint vigente
+   se localiza por `session_id` o por la sesión más reciente de una ventana
+   corta; nunca con la tabla sin filtro.
 
 ## Inicialización
 
 `bash init.sh` desde `examples/agent-continuity/` es idempotente: crea
-`.agent-memory/memory.db`, aplica esquema y seed si faltan, registra el alias
-`mem` y verifica con `db-ai`. Para otro proyecto o para convivir con otro
-montaje: `ACM_HOME=<raíz> ACM_ALIAS=<alias> bash init.sh`. Sustituye `mem` por el
-alias en todas las rutas. El detalle está en el README del ejemplo.
+`.agent-memory/memory.db`, aplica el esquema y la identidad del proyecto si
+faltan, registra el alias `mem` y verifica con `db-ai`. Añade `--demo` para
+incorporar el fixture de demostración. Para otro proyecto o para convivir con
+otro montaje: `ACM_HOME=<raíz> ACM_ALIAS=<alias> bash init.sh`. Sustituye `mem`
+por el alias en todas las rutas. El detalle está en el README del ejemplo.
 
 ## Los siete protocolos
 
 1. **Inicio de sesión y recuperación de contexto.** Verifica el montaje y abre la
-   sesión de ACM antes de escribir. Recupera en este orden: preferencias activas,
-   último checkpoint activo, decisiones activas y observaciones abiertas
-   (`needs_review` y preguntas del checkpoint). Para cuando la pregunta esté
-   respondida.
+   sesión de ACM antes de escribir. Recupera con el guion acotado: preferencias
+   aplicables (por `pref_key` conocido o página mínima), checkpoint vigente
+   (por `session_id` o la sesión más reciente de una ventana corta) y decisiones
+   activas solo del `topic_key` de la tarea en curso; sin tema conocido, página
+   mínima con aviso de recorte. El historial de la sesión se pide después, solo
+   si no hay checkpoint o si la pregunta lo exige. Nunca la tabla entera. Para
+   cuando la pregunta esté respondida.
 2. **Captura de conocimiento durante el trabajo.** Captura observaciones
    durables, decisiones con `kind='decision'`, preferencias y checkpoints. No
    captures conversaciones ni pasos rutinarios. `topic_key` y títulos con
@@ -78,7 +84,9 @@ alias en todas las rutas. El detalle está en el README del ejemplo.
    sesión.
 6. **Cierre y reanudación de sesiones.** Cierra la sesión con estado, fin y
    resumen; deja un checkpoint con el siguiente paso identificable. La sesión
-   siguiente lo recupera sin leer la conversación.
+   siguiente lo recupera sin leer la conversación. La continuidad es del proyecto
+   por defecto, también entre agentes; el mismo agente se exige con filtro
+   explícito.
 7. **Resolución de conflictos y recuerdos contradictorios.** Ante `E_CONFLICT`,
    relee con el ETag nuevo. Ante `E_COMMIT_UNKNOWN`, lee antes de reintentar. Si
    hay dos filas activas para lo mismo, marca `needs_review` y no decidas en
