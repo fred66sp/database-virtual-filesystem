@@ -5,6 +5,8 @@ Usage:
   db-ai --help
 
 Commands:
+  version
+      print the functional version and build metadata
   mount FILE /ALIAS [--mode ro|rw]
       register a SQLite file under an alias
   umount /ALIAS

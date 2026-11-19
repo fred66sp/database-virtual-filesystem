@@ -71,6 +71,9 @@ type result struct {
 // answering with the standard error envelope.
 func execute(inv *invocation, stdin io.Reader) (result, error) {
 	switch inv.spec.name {
+	case "version":
+		// Build metadata only: no config, state or database is touched.
+		return result{data: versionInfo()}, nil
 	case "cd", "pwd":
 		return executeSession(inv)
 	case "touch", "write", "cp", "mv", "rm", "batch":
