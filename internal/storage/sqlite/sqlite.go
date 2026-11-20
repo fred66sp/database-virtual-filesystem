@@ -244,21 +244,9 @@ func (r *reader) List(ctx context.Context, q storage.Query) ([]storage.Row, stri
 
 	var where []string
 	var args []any
-	for _, f := range q.Filters {
-		cond, filterArgs, err := filterCondition(f, t)
-		if err != nil {
-			return nil, "", err
-		}
-		where = append(where, cond)
-		args = append(args, filterArgs...)
-	}
-	if q.Search != nil {
-		cond, searchArgs, err := searchCondition(q.Search, t)
-		if err != nil {
-			return nil, "", err
-		}
-		where = append(where, cond)
-		args = append(args, searchArgs...)
+	where, args, err = filterWhere(q, t)
+	if err != nil {
+		return nil, "", err
 	}
 	if q.Cursor != "" {
 		last, err := cursor.DecodeKey(q.Cursor)
@@ -313,6 +301,54 @@ func (r *reader) List(ctx context.Context, q storage.Query) ([]storage.Row, stri
 	return out, "", nil
 }
 
+// Count is List without rows: one COUNT(*) over the same predicates, so the
+// number is always the size of the set a read would page through (REF-03).
+// Order, Limit, Cursor and Projection do not apply to a count.
+func (r *reader) Count(ctx context.Context, q storage.Query) (int64, error) {
+	t, err := r.table(q.Table)
+	if err != nil {
+		return 0, err
+	}
+	where, args, err := filterWhere(q, t)
+	if err != nil {
+		return 0, err
+	}
+	query := "SELECT COUNT(*) FROM " + quoteIdent(t.Name)
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	var n int64
+	if err := r.q.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count %q: %w", q.Table, err)
+	}
+	return n, nil
+}
+
+// filterWhere renders the typed filters and the grep predicate with every value
+// bound (NFR-02). List and Count share it so a count can never filter
+// differently from the read it summarizes.
+func filterWhere(q storage.Query, t *catalog.Table) ([]string, []any, error) {
+	var where []string
+	var args []any
+	for _, f := range q.Filters {
+		cond, filterArgs, err := filterCondition(f, t)
+		if err != nil {
+			return nil, nil, err
+		}
+		where = append(where, cond)
+		args = append(args, filterArgs...)
+	}
+	if q.Search != nil {
+		cond, searchArgs, err := searchCondition(q.Search, t)
+		if err != nil {
+			return nil, nil, err
+		}
+		where = append(where, cond)
+		args = append(args, searchArgs...)
+	}
+	return where, args, nil
+}
+
 // filterCondition renders one typed filter with every value bound (NFR-02).
 func filterCondition(f storage.Filter, t *catalog.Table) (string, []any, error) {
 	if !t.HasColumn(f.Column) {
@@ -362,34 +398,78 @@ func searchCondition(s *storage.Search, t *catalog.Table) (string, []any, error)
 }
 
 // keysetCondition is the strict "tuple after last" predicate for keyset
-// pagination. It supports mixed directions because OrderSpec carries Desc.
-// orderClause has already validated every column.
+// pagination. It supports mixed directions because OrderSpec carries Desc, and
+// it mirrors OrderSpec.NullsLast exactly on both sides of the comparison: a
+// NULL prefix matches with IS NULL, and a NULL value sorts after every non-NULL
+// value, so no row can follow it at that level (branch omitted).
 func keysetCondition(order []storage.OrderSpec, last storage.Key) (string, []any, error) {
 	parts := make([]string, 0, len(order))
 	var args []any
 	for i := range order {
-		conds := make([]string, 0, i+1)
+		conds := make([]string, 0, i+2)
+		var branchArgs []any
 		for j := 0; j < i; j++ {
-			arg, err := bindValue(last[j])
+			cond, condArgs, err := equalityCondition(order[j], last[j])
 			if err != nil {
 				return "", nil, err
 			}
-			conds = append(conds, quoteIdent(order[j].Column)+" = ?")
-			args = append(args, arg)
+			conds = append(conds, cond)
+			branchArgs = append(branchArgs, condArgs...)
 		}
-		arg, err := bindValue(last[i])
+		cond, condArgs, possible, err := afterCondition(order[i], last[i])
 		if err != nil {
 			return "", nil, err
 		}
-		cmp := ">"
-		if order[i].Desc {
-			cmp = "<"
+		// An impossible branch (a NULL last value under NULLS LAST) has no
+		// placeholder, so its prefix arguments must not reach args either.
+		if !possible {
+			continue
 		}
-		conds = append(conds, quoteIdent(order[i].Column)+" "+cmp+" ?")
-		args = append(args, arg)
+		conds = append(conds, cond)
+		branchArgs = append(branchArgs, condArgs...)
 		parts = append(parts, "("+strings.Join(conds, " AND ")+")")
+		args = append(args, branchArgs...)
+	}
+	if len(parts) == 0 { // the last tuple is already the maximal one
+		return "0", nil, nil
 	}
 	return "(" + strings.Join(parts, " OR ") + ")", args, nil
+}
+
+func equalityCondition(spec storage.OrderSpec, v storage.Value) (string, []any, error) {
+	if v.Kind == "null" {
+		return quoteIdent(spec.Column) + " IS NULL", nil, nil
+	}
+	arg, err := bindValue(v)
+	if err != nil {
+		return "", nil, err
+	}
+	return quoteIdent(spec.Column) + " = ?", []any{arg}, nil
+}
+
+// afterCondition is "this row sorts after last at this level". possible is
+// false when last is the maximal value (NULL under NULLS LAST).
+func afterCondition(spec storage.OrderSpec, v storage.Value) (cond string, args []any, possible bool, err error) {
+	col := quoteIdent(spec.Column)
+	cmp := ">"
+	if spec.Desc {
+		cmp = "<"
+	}
+	if v.Kind == "null" {
+		if spec.NullsLast {
+			return "", nil, false, nil
+		}
+		// SQLite's native order puts NULL first, so any non-NULL follows.
+		return col + " IS NOT NULL", nil, true, nil
+	}
+	arg, err := bindValue(v)
+	if err != nil {
+		return "", nil, false, err
+	}
+	if spec.NullsLast {
+		return "(" + col + " " + cmp + " ? OR " + col + " IS NULL)", []any{arg}, true, nil
+	}
+	return col + " " + cmp + " ?", []any{arg}, true, nil
 }
 
 func (s *Store) snapshot() []catalog.Table {
@@ -543,7 +623,11 @@ func orderClause(order []storage.OrderSpec, t *catalog.Table) (string, error) {
 		if spec.Desc {
 			dir = " DESC"
 		}
-		parts[i] = quoteIdent(spec.Column) + collate + dir
+		nulls := ""
+		if spec.NullsLast {
+			nulls = " NULLS LAST"
+		}
+		parts[i] = quoteIdent(spec.Column) + collate + dir + nulls
 	}
 	return strings.Join(parts, ", "), nil
 }

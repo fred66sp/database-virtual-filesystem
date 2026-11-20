@@ -1,11 +1,12 @@
 // Package cursor encodes and signs keyset pagination positions (DESIGN §7).
 //
 // A signed cursor is base64url(payload) "." base64url(HMAC-SHA256(payload)).
-// The payload carries the version, mount, table, filters, order, search text
-// and last key, so a client cannot reuse a cursor across queries or edit the
-// position without being rejected as E_USAGE. Signing is not encryption: values
-// the policy hides never enter a cursor the client is allowed to receive,
-// because an unauthorized order is refused before the page is served.
+// The payload carries the version, mount, table, filters, order, search text,
+// projection and last key, so a client cannot reuse a cursor across queries or
+// edit the position without being rejected as E_USAGE. Signing is not
+// encryption: values the policy hides never enter a cursor the client is
+// allowed to receive, because an unauthorized order is refused before the page
+// is served.
 package cursor
 
 import (
@@ -22,7 +23,8 @@ import (
 // Version is the only cursor schema this build accepts.
 const Version = 1
 
-// State is the signed payload. Filters and Order bind a cursor to one query.
+// State is the signed payload. Filters, Order and Fields bind a cursor to one
+// query.
 type State struct {
 	Version int                 `json:"v"`
 	Mount   string              `json:"mount"`
@@ -30,6 +32,7 @@ type State struct {
 	Filters []storage.Filter    `json:"filters"`
 	Order   []storage.OrderSpec `json:"order"`
 	Search  string              `json:"search,omitempty"`
+	Fields  []string            `json:"fields,omitempty"`
 	LastKey storage.Key         `json:"last_key"`
 }
 

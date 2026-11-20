@@ -76,7 +76,7 @@ func execute(inv *invocation, stdin io.Reader) (result, error) {
 		return result{data: versionInfo()}, nil
 	case "cd", "pwd":
 		return executeSession(inv)
-	case "touch", "write", "cp", "mv", "rm", "batch":
+	case "touch", "write", "upsert", "cp", "mv", "rm", "batch":
 		return executeMutation(inv, stdin)
 	case "mount", "umount", "mounts", "ls", "tree", "stat", "describe", "cat",
 		"find", "grep", "export":
@@ -167,12 +167,24 @@ func executeRead(inv *invocation) (result, error) {
 		data, err := svc.Describe(ctx, *inv.path)
 		return result{data: data}, err
 	case "cat":
-		data, err := svc.Cat(ctx, *inv.path)
+		data, err := svc.Cat(ctx, *inv.path, inv.fields)
 		return result{data: data}, err
 	case "find":
-		data, truncated, next, err := svc.Find(ctx, *inv.path, inv.where, effectiveLimit(inv.limit), inv.cursor)
+		if inv.count {
+			// A count has no row shape, so --fields, --limit and --order do not
+			// apply to the result; the grammar of a given --order is still
+			// validated inside Count so that a typo cannot hide behind an
+			// ignored flag. The count itself stays order-independent.
+			data, err := svc.Count(ctx, *inv.path, "find", inv.where, inv.order, inv.fields, nil)
+			return result{data: data}, err
+		}
+		data, truncated, next, err := svc.Find(ctx, *inv.path, inv.where, inv.fields, inv.order, effectiveLimit(inv.limit), inv.cursor)
 		return result{data: data, truncated: truncated, nextCursor: next}, err
 	case "grep":
+		if inv.count {
+			data, err := svc.Count(ctx, *inv.path, "grep", nil, "", nil, &inv.args[1])
+			return result{data: data}, err
+		}
 		data, truncated, next, err := svc.Grep(ctx, *inv.path, inv.args[1], effectiveLimit(inv.limit), inv.cursor)
 		return result{data: data, truncated: truncated, nextCursor: next}, err
 	case "export":

@@ -21,20 +21,22 @@ Commands:
       show what a path is
   describe PATH
       describe a table, its columns and capabilities
-  cat PATH
+  cat PATH [--fields COL,...]
       read a row or a field as JSON
   cd PATH
       change the session working directory
   pwd
       print the session working directory
-  find PATH [--where EXPR]... [--limit N] [--cursor TOKEN]
+  find PATH [--where EXPR]... [--order COL[:asc|desc],...] [--fields COL,...] [--count] [--limit N] [--cursor TOKEN]
       filter rows with --where expressions
-  grep PATH TEXT [--limit N] [--cursor TOKEN]
+  grep PATH TEXT [--count] [--limit N] [--cursor TOKEN]
       search a literal substring in text columns
   touch PATH --data JSON|-
       insert a row, returning its key
   write ROW_OR_FIELD --data JSON|- --if-match ETAG
       update a field or a row with an ETag precondition
+  upsert TABLE --data JSON|- [--if-match ETAG] [--dry-run]
+      create or update one row by its primary key, reporting which branch ran
   cp ROW DEST_ROW --if-match ETAG
       copy a row within its table
   mv ROW DEST_ROW --if-match ETAG --apply

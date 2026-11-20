@@ -49,9 +49,11 @@ type treeData struct {
 }
 
 type RowData struct {
-	Path   string                   `json:"path"`
-	Fields map[string]storage.Value `json:"fields"`
-	ETag   string                   `json:"etag"`
+	Path string `json:"path"`
+	// Fields is a map without projection (alphabetical keys, today's contract)
+	// and projectedFields under --fields (catalog order, key always present).
+	Fields any    `json:"fields"`
+	ETag   string `json:"etag"`
 }
 
 type statData struct {
@@ -607,14 +609,18 @@ func (s Service) Describe(ctx context.Context, p vfs.Path) (describeData, error)
 }
 
 // Cat returns a whole row as {path, fields, etag} or a single typed field as
-// {kind, data} (DESIGN §10).
-func (s Service) Cat(ctx context.Context, p vfs.Path) (any, error) {
+// {kind, data} (DESIGN §10). fields projects a row's rendered columns; a field
+// path has nothing to project.
+func (s Service) Cat(ctx context.Context, p vfs.Path, fields []string) (any, error) {
 	switch p.Kind {
 	case vfs.KindRow, vfs.KindField:
 	case vfs.KindTable:
 		return nil, fmt.Errorf("%w: cat needs a row or field path", storage.ErrUnsupported)
 	default:
 		return nil, fmt.Errorf("%w: cat needs a row or field path", storage.ErrUnsupported)
+	}
+	if p.Kind == vfs.KindField && len(fields) > 0 {
+		return nil, fmt.Errorf("%w: --fields needs a row path", storage.ErrInvalid)
 	}
 
 	path, err := p.Canonical()
@@ -644,6 +650,10 @@ func (s Service) Cat(ctx context.Context, p vfs.Path) (any, error) {
 		if err != nil {
 			return err
 		}
+		projection, err := parseFields(fields, t)
+		if err != nil {
+			return err
+		}
 		key, err := resolveKey(p.Key, t)
 		if err != nil {
 			return err
@@ -660,7 +670,7 @@ func (s Service) Cat(ctx context.Context, p vfs.Path) (any, error) {
 			data = value
 			return nil
 		}
-		data = RowData{Path: path, Fields: fieldMap(row), ETag: row.ETag}
+		data = RowData{Path: path, Fields: rowFields(row, t, projection), ETag: row.ETag}
 		return nil
 	})
 	return data, err
