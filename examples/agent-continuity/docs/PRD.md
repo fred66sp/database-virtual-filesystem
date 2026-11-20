@@ -360,10 +360,10 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | Pregunta o decisión | Por qué importa | Responsable | Condición de respuesta |
 |---|---|---|---|
 | ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | **Decidido (PO, 2026-11-19): se mantiene el objetivo de M-ACM-03 (2 000 tokens)** y se ajusta la convención de recuperación de la skill al conjunto mínimo medido (7 729 B ≈ 1 933 tokens, protocolos.md §3.6); los objetivos de M-ACM-02 y M-ACM-05 quedan como están en §7 |
-| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | decisión de ACM-04; la política concreta pertenece al PO (tk-25) |
+| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | **Decidido (PO, 2026-11-20): el agente de trabajo propone la revisión y el PO la ratifica**, con cadencia al inicio de cada sesión que toque la memoria del proyecto; el convenio ACM-04 (informar y proponer, nunca escribir durante la lectura) queda intacto |
 | ¿Qué tope de cuerpo y qué retención se aplican a filas obsoletas? | afecta contexto y crecimiento | ingeniería y PO | **Decidido (PO, 2026-11-19): sin purga automática.** Las filas obsoletas permanecen con su `status`; la purga física es mantenimiento manual autorizado. Los topes de cuerpo son convención de la skill |
 | ¿Las preferencias son solo del proyecto o también por agente? | cambia el modelo de datos y la recuperación | PO | **Decidido (PO, 2026-11-19): solo por proyecto.** La identidad del agente queda como procedencia, no como clave de recuperación |
-| ¿La skill marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | skill y PO | revisión de convenciones — decisión de ACM-04; la política concreta pertenece al PO (tk-25) |
+| ¿La skill marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | skill y PO | **Decidido (PO, 2026-11-20): solo informa.** La lectura nunca escribe (ACM-04); el vencimiento se detecta en el flujo de revisión (§8.7 del DESIGN), que es quien marca `needs_review` y decide el estado |
 | ¿Se necesita copia de seguridad o restauración en el alcance? | el directorio no está en Git | PO | **Decidido (PO, 2026-11-19): fuera de alcance.** Un `cp` del `.sqlite` es suficiente; no se añade nada al MVP |
 | ¿El bootstrap es un `schema.sql` con runbook o un paso del ejemplo ACM-03? | afecta reproducibilidad e instalación | PO | **Decidido (PO, 2026-11-19, revisa la decisión previa):** `init.sh` crea memoria limpia por defecto (esquema, metadatos del proyecto y montaje) y `--demo` añade el fixture de `seed.sql`; sobre una base existente no re-aplica el DDL ni toca los recuerdos |
 | ¿Qué guion de recuperación se mide para M-ACM-03? | determina el contexto de reanudación y la comparabilidad de la métrica | PO | **Decidido (PO, 2026-11-19): guion acotado** por `topic_key` de la tarea y `pref_key` aplicable (protocolos.md §1.4 y §3.6). Resultado: con `session_id` conocido, 1 444 tokens y SUPERADO; en frío, 9 058 tokens y FALLIDO por C-ACM-03; el objetivo de 2 000 tokens queda intacto |
@@ -434,7 +434,7 @@ Documento entregado: PRD completo; líneas base medidas y veredictos de M-ACM-01
 Fuentes inventariadas: §1.1
 Afirmaciones críticas y trazabilidad: §17
 Contradicciones y UNKNOWN: sin UNKNOWN vivos en las métricas; la magnitud del problema de continuidad no se midió con entrevistas
-Decisiones pendientes: preguntas abiertas de §14 sobre la revisión de la cola `needs_review` (tk-25). Resueltas el 2026-11-20: ratificación humana de M-ACM-05 (PO) y las propuestas de evolución C-ACM-01 a C-ACM-08 de DESIGN §14 (tk-22)
+Decisiones pendientes: ninguna. Resueltas el 2026-11-20: ratificación humana de M-ACM-05 (PO), las propuestas de evolución C-ACM-01 a C-ACM-08 de DESIGN §14 (tk-22) y la política de revisión de la cola `needs_review` (tk-25)
 Validaciones necesarias: producto, diseño, ingeniería, QA y usuarios (§15); M-ACM-05 exige evaluador humano
 Veredicto de la puerta de calidad: PASA A REVISIÓN; la ratificación humana de M-ACM-05 se registró el 2026-11-20 (PO)
 ```
