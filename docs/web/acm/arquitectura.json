@@ -55,7 +55,7 @@
       ]
     },
     {
-      "id": "skill-acm",
+      "id": "adaptador-acm",
       "type": "frontend",
       "label": "Adaptador acm.py (AIF)",
       "sublabel": "eventos AIF y formularios",
@@ -83,9 +83,9 @@
       ]
     },
     {
-      "id": "skill-dbai",
-      "type": "database",
-      "label": "Skill db-ai",
+      "id": "formas-dbai",
+      "type": "external",
+      "label": "db-ai CommandLineTool",
       "sublabel": "formas de comando y errores",
       "pos": [
         40,
@@ -248,34 +248,34 @@
     {
       "id": "a-escribe",
       "from": "agente-a",
-      "to": "skill-acm",
+      "to": "adaptador-acm",
       "label": "trabaja",
       "variant": "emphasis"
     },
     {
       "id": "b-reanuda",
       "from": "agente-b",
-      "to": "skill-acm",
+      "to": "adaptador-acm",
       "label": "reanuda",
       "variant": "emphasis"
     },
     {
       "id": "c-consulta",
       "from": "agente-c",
-      "to": "skill-acm",
+      "to": "adaptador-acm",
       "label": "consulta",
       "variant": "dashed"
     },
     {
-      "id": "consulta-formas",
-      "from": "skill-acm",
-      "to": "skill-dbai",
-      "label": "encapsula las formas",
+      "id": "invoca-formas",
+      "from": "adaptador-acm",
+      "to": "formas-dbai",
+      "label": "invoca",
       "variant": "dashed"
     },
     {
       "id": "invoca",
-      "from": "skill-acm",
+      "from": "adaptador-acm",
       "to": "cli",
       "label": "invoca",
       "variant": "emphasis"
@@ -342,7 +342,7 @@
     {
       "id": "funda",
       "from": "fuentes",
-      "to": "skill-acm",
+      "to": "adaptador-acm",
       "label": "fundamenta",
       "variant": "dashed"
     }
@@ -352,8 +352,8 @@
       "dot": "cyan",
       "title": "Composición, no motor nuevo",
       "items": [
-        "SQLite guarda; db-ai expone rutas, ETag, política y transacciones; la skill decide qué capturar, cómo consolidar y cómo recuperar",
-        "No hay CLI, daemon, servidor MCP, embeddings ni proveedor LLM; el esquema se crea fuera de db-ai con init.sh y sqlite3",
+        "SQLite guarda; db-ai expone rutas, ETag, política y transacciones; el adaptador decide qué capturar, cómo consolidar y cómo recuperar",
+        "No hay daemon, servidor MCP, embeddings ni proveedor LLM; el adaptador acm es una CLI fina y el esquema se crea fuera de db-ai con init.sh y sqlite3",
         "El alias mem se registra con su política en config.json porque db-ai mount no tiene un flag para escribirla"
       ]
     },

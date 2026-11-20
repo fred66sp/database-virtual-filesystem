@@ -17,6 +17,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 - `serve-explorer.sh`: arranque persistente del explorador en el puerto 8893 con
   `start`, `status` y `stop`, pid y registro en `.run/` y arranque idempotente;
   no toca un proceso ajeno que ocupe el puerto.
+- Demo del Visual Explorer en la documentación web: la página principal de
+  `docs/web/` explica y enlaza una maqueta interactiva autónoma
+  (`docs/web/visual-explorer-demo.html`, copia de la demo de diseño) con árbol
+  de montajes, vista tabular, inspector y vista hexadecimal sobre datos de
+  ejemplo; sin recursos externos ni peticiones reales.
 
 ### Modificado
 
