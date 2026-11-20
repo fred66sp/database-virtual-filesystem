@@ -5,6 +5,22 @@ Todos los cambios notables de este proyecto se documentan en este fichero.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es/).
 
+## [No publicado]
+
+### Modificado
+
+- Adaptador ACM (`examples/agent-continuity/tools/acm.py`): interfaz unificada
+  autodescriptiva. Cada evento AIF resuelve en la invocación que aporta sus
+  datos y devuelve su formulario solo si falta un campo obligatorio; `start`
+  responde en Markdown compacto con el contexto de continuidad completo
+  (sesión anterior con su checkpoint, decisiones vigentes, conocimiento
+  reciente y preferencias activas, recuerdos completos); `recall` deriva y
+  relaja los términos internamente; las confirmaciones de escritura son
+  mínimas. Se conservan `remember`/`search` como comandos convencionales y la
+  captura de `pattern`/`architecture` por `remember`. Garantías intactas:
+  deduplicación por `content_hash`, concurrencia por ETag, `batch`
+  transaccional e idempotencia por `form_id`.
+
 ## [0.4.0] - 2026-11-20
 
 ### Añadido
