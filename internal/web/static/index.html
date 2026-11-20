@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>db-ai Visual Explorer</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 2.5rem clamp(1rem, 6vw, 4rem);
+    background: #14161a;
+    color: #d7dce2;
+    font: 16px/1.5 "Fira Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { margin: 0 0 .25rem; font-size: 1.5rem; font-weight: 600; letter-spacing: .01em; }
+  .tag {
+    display: inline-block;
+    margin-bottom: 2rem;
+    padding: .15rem .55rem;
+    border: 1px solid #2c333c;
+    border-radius: 999px;
+    color: #8b98a6;
+    font-size: .8rem;
+  }
+  .pending { margin: 0 0 .35rem; color: #9fb3c8; }
+  .pending small { color: #6c7a89; }
+  pre {
+    margin: 1.5rem 0 0;
+    padding: 1rem 1.25rem;
+    overflow: auto;
+    border: 1px solid #262c34;
+    border-radius: 8px;
+    background: #0f1114;
+    color: #b7c4d1;
+    font: 13px/1.55 "Inconsolata", ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .error { color: #e08585; }
+</style>
+</head>
+<body>
+  <h1>db-ai Visual Explorer</h1>
+  <span class="tag">P3 · servidor local de solo lectura</span>
+  <p class="pending">Explorador visual — llega en P4</p>
+  <p class="pending"><small>Latido: respuesta formateada de <code>/api/ls?path=/</code></small></p>
+  <pre id="heartbeat">cargando…</pre>
+<script>
+  const out = document.getElementById("heartbeat");
+  fetch("/api/ls?path=/")
+    .then((response) => response.json())
+    .then((body) => { out.textContent = JSON.stringify(body, null, 2); })
+    .catch((error) => { out.classList.add("error"); out.textContent = String(error); });
+</script>
+</body>
+</html>

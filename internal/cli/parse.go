@@ -16,6 +16,8 @@ const (
 	maxTimeout     = 60 * time.Second
 	maxLimit       = 1000
 	maxDepth       = 4
+	defaultPort    = 8080
+	maxPort        = 65535
 )
 
 // invocation is one parsed command line, before any storage access.
@@ -55,6 +57,8 @@ type invocation struct {
 	data    string
 	ifMatch string
 	format  string
+	port    int
+	open    bool
 
 	dryRun bool
 	apply  bool
@@ -67,7 +71,7 @@ type invocation struct {
 // usage errors. The standard flag package is not used because it stops at the
 // first positional and cannot bind global flags that precede the command.
 func parse(args []string) (*invocation, error) {
-	inv := &invocation{timeout: defaultTimeout}
+	inv := &invocation{timeout: defaultTimeout, port: defaultPort}
 	var pos []string
 	seen := make(map[string]bool)
 	endOfFlags := false
@@ -161,6 +165,8 @@ func (inv *invocation) setBool(name string) {
 		inv.apply = true
 	case "count":
 		inv.count = true
+	case "open":
+		inv.open = true
 	}
 }
 
@@ -225,6 +231,15 @@ func (inv *invocation) setValue(name, value string) error {
 			return usageError("--format must be json or jsonl")
 		}
 		inv.format = value
+	case "port":
+		n, err := parseIntFlag("--port", value, 1)
+		if err != nil {
+			return err
+		}
+		if n > maxPort {
+			return usageError("--port exceeds maximum %d", maxPort)
+		}
+		inv.port = n
 	}
 	return nil
 }

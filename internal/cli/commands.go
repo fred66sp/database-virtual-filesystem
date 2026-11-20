@@ -41,6 +41,9 @@ var (
 	flagFormat  = flagSpec{"format", "json|jsonl", flagString, "output format, json or jsonl (default json)"}
 	flagDryRun  = flagSpec{"dry-run", "", flagBool, "plan the mutation without executing it"}
 	flagApply   = flagSpec{"apply", "", flagBool, "confirm the destructive operation (required)"}
+
+	flagPort = flagSpec{"port", "N", flagString, "port on 127.0.0.1 to listen on (default 8080)"}
+	flagOpen = flagSpec{"open", "", flagBool, "open the explorer in the default browser"}
 )
 
 var globalFlags = []flagSpec{flagJSON, flagSession, flagTimeout, flagActor, flagRequestID, flagHelp}
@@ -247,6 +250,13 @@ var commands = []commandSpec{
 		roles:   []argRole{argPath},
 		flags:   []flagSpec{flagWhere, flagFormat, flagLimit, flagCursor},
 		wp:      "WP-03",
+	},
+	{
+		name:    "serve",
+		summary: "serve the read-only local explorer over HTTP",
+		usage:   "serve [--port N] [--open]",
+		flags:   []flagSpec{flagPort, flagOpen},
+		wp:      "P3",
 	},
 }
 
