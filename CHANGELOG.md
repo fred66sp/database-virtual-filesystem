@@ -7,8 +7,21 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 
 ## [No publicado]
 
+### Añadido
+
+- `db-ai serve [--port N] [--open]`: Visual Explorer local de solo lectura. Un
+  servidor HTTP en `127.0.0.1` reutiliza el `app.Service` de la CLI —catálogo,
+  consultas y políticas—, expone una ruta `GET` por operación de lectura y
+  sirve con `embed.FS` una SPA sin paso de compilación; al existir solo handlers
+  `GET`, ninguna petición alcanza una mutación. Cierre limpio con Ctrl+C.
+- `serve-explorer.sh`: arranque persistente del explorador en el puerto 8893 con
+  `start`, `status` y `stop`, pid y registro en `.run/` y arranque idempotente;
+  no toca un proceso ajeno que ocupe el puerto.
+
 ### Modificado
 
+- DESIGN §3 y §15 documentan el subcomando `serve`: superficie `GET`, servicio
+  compartido por petición, activos embebidos, cabeceras y operación local.
 - Adaptador ACM (`examples/agent-continuity/tools/acm.py`): interfaz unificada
   autodescriptiva. Cada evento AIF resuelve en la invocación que aporta sus
   datos y devuelve su formulario solo si falta un campo obligatorio; `start`

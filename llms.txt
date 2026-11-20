@@ -13,6 +13,7 @@
 - [Registro de cambios](CHANGELOG.md)
 - [Mapa del repositorio para agentes](AGENTS.md)
 - [Documentación web (HTML)](docs/web/index.html) — previsualización local con `./serve-web.sh`
+- [Visual Explorer local](README.md#explorar-las-bases) — `db-ai serve` y `./serve-explorer.sh` en http://127.0.0.1:8893; diseño en DESIGN §15
 - [Decisiones de arquitectura (ADR)](docs/decisions/README.md) — exportación generada del tablero
 - [Revisión de los contratos iniciales](docs/reviews/2026-11-19-prd-design-review.md)
 - [Validación del driver SQLite (WP-01)](docs/reviews/2026-11-19-driver-sqlite-validation.md)
