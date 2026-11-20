@@ -605,7 +605,7 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** añadir `version` o `--version` a db-ai, o incluir la versión en `mounts`/`meta` de una operación existente. Es una propuesta de evolución, no una ampliación de ACM.
 
-**Estado (2026-11-19):** aprobada por el PO e implementada en el árbol como `db-ai version`, que emite `{version, commit, state}` con el sobre JSON estándar; el contrato está en DESIGN de db-ai §3. Pendiente de commit y release con autorización del PO; hasta entonces, el binario instalado puede devolver `E_USAGE` y, sin `ldflags`, `commit` es `unknown`.
+**Estado (2026-11-19):** aprobada por el PO e implementada en el árbol como `db-ai version`, que emite `{version, commit, state}` con el sobre JSON estándar; el contrato está en DESIGN de db-ai §3. **Actualización (2026-11-20):** cometida y publicada con la v0.3.0 (commit `9f1bcfd`); el binario de la release responde `version` con el sobre estándar, y `commit` queda `unknown` en builds sin `ldflags`.
 
 ### C-ACM-02 — Sin búsqueda difusa, FTS ni ranking
 
@@ -615,6 +615,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** un modo de búsqueda FTS5 o trigramas de solo lectura, o una operación de búsqueda con ranking, fuera del alcance de ACM.
 
+**Estado (2026-11-20):** aplazada por el PO. La recuperación actual con filtros, `topic_key` y revisión manual es adecuada; se retomará cuando el recall observado en uso real justifique FTS o ranking. Sin fecha prevista.
+
 ### C-ACM-03 — Sin proyección, orden descendente ni recuento en la CLI
 
 **Evidencia:** `db-ai find --help` y `db-ai export --help` exponen `--where`, `--limit`, `--cursor` y `--format`, pero no campos, orden ni recuento; DESIGN de db-ai §3 no los incluye, aunque el tipo `Query` de §6 tiene `Projection` y `Order`. `find` ordena por PK ascendente; no hay `--order` descendente.
@@ -622,6 +624,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 **Impacto en ACM:** `find` devuelve filas completas, lo que consume contexto; la recencia se calcula con el UUIDv7 mayor de una ventana acotada; no hay conteos baratos. El DESIGN compensa con límites y topes de texto.
 
 **Propuesta:** `--fields`, `--order`/`--sort` y `--count` (o un `stat` con recuento), manteniendo el orden determinista y los límites. Fuera de ACM.
+
+**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: es la propuesta de mayor rentabilidad —ahorro de contexto en `find` y recencia más barata— con riesgo bajo, pues respeta el orden determinista y los límites existentes. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20.
 
 ### C-ACM-04 — Sin upsert ni inserción condicional
 
@@ -631,6 +635,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** una semántica de inserción condicional o de upsert por clave única, con resultado explícito de “creado” o “existente”. Fuera de ACM.
 
+**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: el ACM compensa hoy la idempotencia con `touch` + búsqueda por hash + `write` + verificación, determinista pero costoso; el resultado explícito de “creado” o “existente” simplifica el flujo sin ambigüedad. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20.
+
 ### C-ACM-05 — Sin vistas ni búsqueda entre tablas
 
 **Evidencia:** DESIGN de db-ai §5 excluye vistas del MVP (decisión D-20); `find` y `grep` reciben una ruta de tabla, no una raíz con varias tablas (skill local `db-ai`, `references/comandos.md`).
@@ -638,6 +644,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 **Impacto en ACM:** recuperar conocimiento exige consultar `observations`, `checkpoints` y `preferences` por separado; no hay una superficie única de solo lectura. Por eso las decisiones viven con las observaciones.
 
 **Propuesta:** vistas de solo lectura o una operación de búsqueda a nivel de alias; exigiría revisar la exclusión D-20 y un ADR propio. Fuera de ACM.
+
+**Estado (2026-11-20):** aplazada por el PO. Motivo: entra en conflicto con una decisión de diseño aprobada (D-20) y exige un ADR propio; el coste de consulta por tabla no ha demostrado ser un problema en la práctica actual del ACM. Sin fecha prevista.
 
 ### C-ACM-06 — Vocabulario de `ops` de la política no enumerado por completo
 
@@ -647,6 +655,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** documentar en DESIGN de db-ai §9 el vocabulario completo de `ops`, incluida la comprobación por elemento del lote. Es una corrección documental, no una capacidad nueva.
 
+**Estado (2026-11-20):** aceptada por el PO. Motivo: es documentación pura, el coste es mínimo y hoy un operador puede escribir una política incompleta por no tener el vocabulario contractual. Implementación pendiente como corrección en DESIGN de db-ai después de cerrar la épica tk-20.
+
 ### C-ACM-07 — Sin DDL ni creación de esquema
 
 **Evidencia:** PRD de db-ai §2 y §8 excluyen crear tablas mediante la CLI; la skill local `db-ai` lo repite. db-ai monta una base existente y no altera el esquema.
@@ -655,6 +665,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** ninguna sobre db-ai; el bootstrap de ACM se documenta en §3.3 y está implementado en `init.sh`. Si se quisiera una inicialización integrada, sería una herramienta de despliegue, no una ampliación del núcleo.
 
+**Estado (2026-11-20):** rechazada por el PO. Motivo: es diseño deliberado del MVP —db-ai monta una base existente y no altera el esquema—, no una carencia; el bootstrap externo de ACM (`init.sh`) cubre la necesidad.
+
 ### C-ACM-08 — `describe` no expone las expresiones `CHECK`
 
 **Evidencia:** DESIGN de db-ai §5 anuncia detección de restricciones, pero la salida observada de `describe` incluye columnas, PK, índices, claves foráneas, referencias entrantes, triggers, capacidades y limitaciones, y no incluye las expresiones `CHECK`. El contrato también declara que db-ai no analiza expresiones de restricciones mediante heurísticas inseguras.
@@ -662,6 +674,8 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 **Impacto en ACM:** el agente descubre las reglas de decisión, sustitución y no-vacío por `E_CONSTRAINT` o por la skill, no por `describe`. La documentación del esquema debe ser explícita para que el error no sea la primera fuente.
 
 **Propuesta:** exponer en `describe` un resumen seguro y acotado de las restricciones `CHECK`, o publicar el DDL como referencia junto al montaje. Fuera de ACM.
+
+**Estado (2026-11-20):** aplazada por el PO. Motivo: parsear o resumir `CHECK` con seguridad es delicado por contrato, y la alternativa barata (publicar el DDL como referencia) merece decidirse junto con la evolución del contrato de `describe`. La skill documenta mientras tanto el esquema, y el `E_CONSTRAINT` sigue siendo la señal de ejecución. Sin fecha prevista.
 
 ## 15. Verificación
 
