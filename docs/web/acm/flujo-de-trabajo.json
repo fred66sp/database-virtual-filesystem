@@ -16,7 +16,7 @@
     },
     {
       "id": "operacion",
-      "label": "Skill agent-continuity"
+      "label": "Adaptador acm.py (AIF)"
     },
     {
       "id": "memoria",
@@ -398,7 +398,7 @@
       "dot": "cyan",
       "title": "Reanudar con contexto acotado",
       "items": [
-        "Antes de escribir, mounts confirma el alias y meta el project_key; si no coincide, la skill se detiene",
+        "Antes de escribir, mounts confirma el alias y meta el project_key; si no coincide, el adaptador se detiene",
         "El conjunto de reanudación son cuatro find filtrados: checkpoint activo, observaciones de la sesión, decisiones activas y preferencias activas",
         "ACM-05 midió ese conjunto en 7 729 bytes ≈ 1 933 tokens; añadir el listado de sesiones o un cat redundante lo superó"
       ]
