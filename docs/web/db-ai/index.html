@@ -106,7 +106,7 @@
       </div>
 
       <div class="note">
-        <p><strong>Lo que no hace.</strong> No crea tablas, no migra esquemas, no administra el motor y no acepta SQL libre, ORMs ni lenguaje natural. Tampoco implementa un servidor, FUSE ni PostgreSQL en el MVP.</p>
+        <p><strong>Lo que no hace.</strong> No crea tablas, no migra esquemas, no administra el motor y no acepta SQL libre, ORMs ni lenguaje natural. Su servidor local, <code>db-ai serve</code>, es de solo lectura y escucha en <code>127.0.0.1</code>; FUSE y PostgreSQL quedan fuera del MVP.</p>
       </div>
     </section>
 
@@ -223,7 +223,7 @@ db-ai write /work/tasks/TK-001 \
         <table>
           <thead><tr><th>Fuera del MVP</th><th>Motivo</th></tr></thead>
           <tbody>
-            <tr><td>FUSE, servidor, daemon o shell interactivo.</td><td>La CLI, stdin y stdout bastan para un agente; el shell queda como futuro.</td></tr>
+            <tr><td>FUSE, daemon o shell interactivo.</td><td>El servidor local de solo lectura ya existe (<code>db-ai serve</code>); la CLI, stdin y stdout bastan para un agente y el shell queda como futuro.</td></tr>
             <tr><td>LLM, embeddings, lenguaje natural o generación de SQL.</td><td>La IA es consumidora; el producto no depende de un proveedor ni interpreta peticiones.</td></tr>
             <tr><td>SQL libre, DDL, migraciones y creación de tablas.</td><td>Evita modificaciones implícitas y mantiene el esquema como territorio del operador.</td></tr>
             <tr><td>Vistas fuera del alcance; tablas internas y virtuales excluidas de mutación.</td><td>Las vistas no se exponen en el MVP; las tablas virtuales no se modifican. La lectura se anuncia con las capacidades que el catálogo puede demostrar.</td></tr>
@@ -274,7 +274,7 @@ db-ai write /work/tasks/TK-001 \
       <p>Cada diagrama es un artefacto de Archify: se abre como página suelta, con su especificación <code>.json</code> y su recibo <code>.delivery.json</code> junto al HTML. Se vuelve con el botón atrás o con el índice de esta página.</p>
 
       <div class="note">
-        <p><strong>ACM es la aplicación de referencia.</strong> Compone SQLite, <code>db-ai</code> y una skill de comportamiento para guardar memoria de continuidad. Su sitio explica las tres piezas y el ciclo de reanudación: <a href="../acm/">abrir ACM</a>.</p>
+        <p><strong>ACM es la aplicación de referencia.</strong> Compone SQLite, <code>db-ai</code> y un adaptador (AIF) para guardar memoria de continuidad. Su sitio explica las tres piezas y el ciclo de reanudación: <a href="../acm/">abrir ACM</a>.</p>
       </div>
     </section>
 

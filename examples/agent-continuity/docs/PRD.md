@@ -8,7 +8,7 @@
 | Campo | Valor |
 |---|---|
 | Nombre | Agent Continuity Memory (ACM) |
-| Tipo | feature sobre db-ai; ejemplo de composición SQLite + db-ai + skill |
+| Tipo | feature sobre db-ai; ejemplo de composición SQLite + db-ai + adaptador (AIF) |
 | Versión | 0.1.0 |
 | Estado | en revisión: pasa a revisión del PO con métricas medidas (§18); decisiones §14 aplicadas |
 | Propietario | PO del proyecto |
@@ -25,16 +25,15 @@
 | `docs/DESIGN.md` de db-ai | documento | repositorio | 2026-11-19 | contrato técnico de db-ai; comandos, ETag, política y transacciones | los ADR se resumen en su §14; el registro canónico está en el tablero |
 | `README.md` del repositorio | documento | repositorio | UNKNOWN | estado de db-ai y comandos mínimos | delega las formas exactas a DESIGN |
 | `llms.txt` y `AGENTS.md` | documento | repositorio | UNKNOWN | mapa de fuentes y convenciones del repositorio | no contiene contratos de producto |
-| skill `db-ai` local | documento | repositorio SKILLS-AGP, `src/db-ai/` | versión 0.1.0 | flujo, comandos, escritura y errores de db-ai | el paquete local es la fuente canónica; sus referencias mandan sobre cualquier página publicada |
 | documentación de Engram | documento web | https://github.com/Gentleman-Programming/engram | UNKNOWN | inspiración conceptual: sesiones, observaciones, `topic_key`, deduplicación, revisión y conflictos | no hay código local ni se clona; no se atribuye comportamiento a la versión usada |
 | encargo de la tarea tk-18 | decisión | tablero tasks-ai | 2026-11-19 | objetivo, decisiones aprobadas y criterio de aceptación | no es un documento versionado; las decisiones aprobadas se registran en §16 |
 | contratos de esta entrega | documento | este repositorio | 2026-11-19 | PRD y DESIGN de ACM | propuesta sujeta a revisión del PO |
 
 ## 2. Resumen y propósito
 
-ACM es una memoria persistente de continuidad para agentes IA que trabajan en un proyecto. Registra sesiones, hallazgos, decisiones con justificación, checkpoints de reanudación y preferencias operativas en una base SQLite local por proyecto, montada con db-ai como el alias `mem`. Una sesión posterior consulta esa memoria mediante rutas, filtros y búsqueda literal, sin embeddings, sin servidor MCP y sin una CLI nueva.
+ACM es una memoria persistente de continuidad para agentes IA que trabajan en un proyecto. Registra sesiones, hallazgos, decisiones con justificación, checkpoints de reanudación y preferencias operativas en una base SQLite local por proyecto, montada con db-ai como el alias `mem`. Una sesión posterior consulta esa memoria con el adaptador `acm`, que aplica las rutas, los filtros y la búsqueda literal de db-ai, sin embeddings y sin servidor MCP.
 
-El propósito de esta entrega es demostrar que SQLite + db-ai + una skill bastan para construir continuidad verificable. El éxito se mide por la reanudación de trabajo con contexto acotado, por la trazabilidad de las decisiones y por la ausencia de un motor de memoria nuevo. ACM no clona Engram: adopta su vocabulario conceptual (sesiones, observaciones, decisiones, preferencias, revisión y obsolescencia) sobre las garantías que db-ai ya ofrece.
+El propósito de esta entrega es demostrar que SQLite + db-ai y un adaptador (AIF) bastan para construir continuidad verificable. El éxito se mide por la reanudación de trabajo con contexto acotado, por la trazabilidad de las decisiones y por la ausencia de un motor de memoria nuevo. ACM no clona Engram: adopta su vocabulario conceptual (sesiones, observaciones, decisiones, preferencias, revisión y obsolescencia) sobre las garantías que db-ai ya ofrece.
 
 ## 3. Universal Idea Model
 
@@ -50,7 +49,7 @@ Los agentes trabajan por sesiones y pierden contexto al terminar, al compactar o
 
 El agente IA que opera en el repositorio es la persona primaria: necesita reanudar sin repetir descubrimientos ni contradecir decisiones previas. El PO y el operador humano son personas secundarias: revisan decisiones, fijan preferencias y auditan por qué se hizo algo. Un agente de validación (ACM-05) comprueba invocaciones, latencia y contexto consumido.
 
-La evidencia disponible es documental y operativa: `AGENTS.md`, la skill `db-ai`, el tablero del proyecto y la documentación de Engram. No hay entrevistas ni analítica de uso; por tanto, el problema se sostiene como inferencia del modelo de trabajo, no como hecho medido.
+La evidencia disponible es documental y operativa: `AGENTS.md`, la documentación y la CLI de `db-ai`, el tablero del proyecto y la documentación de Engram. No hay entrevistas ni analítica de uso; por tanto, el problema se sostiene como inferencia del modelo de trabajo, no como hecho medido.
 
 ### 4.3 Dinámica actual
 
@@ -72,13 +71,13 @@ Hipótesis: un esquema pequeño y determinista, con recuperación acotada y cons
 
 ### 4.6 Estado ideal
 
-Una sesión nueva recupera el checkpoint activo, las decisiones vigentes y las preferencias aplicables en pocas invocaciones y poco contexto. Cada cambio de decisión deja una cadena trazable. Los duplicados exactos no crean filas nuevas. El conocimiento obsoleto se marca, no se borra en silencio. El repositorio no gana un servidor, una CLI adicional ni una dependencia de proveedor LLM.
+Una sesión nueva recupera el checkpoint activo, las decisiones vigentes y las preferencias aplicables en pocas invocaciones y poco contexto. Cada cambio de decisión deja una cadena trazable. Los duplicados exactos no crean filas nuevas. El conocimiento obsoleto se marca, no se borra en silencio. El repositorio no gana un motor de memoria, un servidor MCP ni una dependencia de proveedor LLM; el adaptador `acm` es una pieza fina sobre db-ai.
 
 ## 5. Usuarios objetivo y personas
 
 | Persona | Contexto | Necesidad | Evidencia | Qué la diferencia |
 |---|---|---|---|---|
-| Agente IA en un repositorio agent-first | sesiones con compactación y cambio de modelo | reanudar sin reconstruir; registrar decisiones y hallazgos | `AGENTS.md`, skill `db-ai`, tablero del proyecto | escribe memoria y depende de comandos deterministas |
+| Agente IA en un repositorio agent-first | sesiones con compactación y cambio de modelo | reanudar sin reconstruir; registrar decisiones y hallazgos | `AGENTS.md`, documentación de `db-ai`, tablero del proyecto | escribe memoria y depende de comandos deterministas |
 | PO y operador humano | revisión de alcance, decisiones y políticas | auditar por qué se decidió; fijar preferencias | tablero y convenciones del repositorio | puede crear preferencias sin sesión; no es identidad autenticada |
 | Agente de validación | ACM-05 | medir invocaciones, latencia y contexto | criterio de aceptación de tk-18 | trabaja con fixtures reproducibles y compara resultados |
 
@@ -86,7 +85,7 @@ Una sesión nueva recupera el checkpoint activo, las decisiones vigentes y las p
 
 ### 6.1 Objetivos
 
-- O-ACM-01: demostrar la composición SQLite + db-ai + skill sin un motor de memoria nuevo.
+- O-ACM-01: demostrar la composición SQLite + db-ai + adaptador (AIF) sin un motor de memoria nuevo.
 - O-ACM-02: reducir el contexto necesario para reanudar una sesión.
 - O-ACM-03: conservar decisiones con justificación y cadena de sustitución.
 - O-ACM-04: impedir duplicados exactos y hacer visible la obsolescencia.
@@ -120,7 +119,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 
 - Una base SQLite por proyecto en `.agent-memory/memory.db`, excluida por `.gitignore` y montada como alias `mem`.
 - Esquema de memoria con `meta`, `sessions`, `observations` (incluidas las decisiones), `checkpoints` y `preferences`.
-- Convenciones de la skill `agent-continuity` (ACM-04): cuándo capturar, cómo consolidar, cómo recuperar y cómo reconciliar conflictos.
+- Convenciones del adaptador `acm` y del bloque de memoria de `AGENTS.md` (ACM-04): cuándo capturar, cómo consolidar, cómo recuperar y cómo reconciliar conflictos.
 - Ejemplo funcional y evidencias de validación (ACM-03 y ACM-05).
 - Garantías deterministas que aporta db-ai: rutas, ETag, política de acceso, transacciones y auditoría.
 - Procedencia declarada por fila: agente, sesión, fuente y marcas temporales.
@@ -132,11 +131,11 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | Clonar Engram: MCP, HTTP, nube, TUI o interfaz de conflictos | ACM usa db-ai y SQLite; no añade servidores ni protocolos |
 | Guardar conversaciones, prompts o salidas de herramientas completas | la memoria guarda conocimiento consolidado y reutilizable, no un registro bruto |
 | Embeddings, base vectorial, FTS o ranking semántico | db-ai no los ofrece y ACM no añade dependencias; `grep` es literal |
-| Nueva CLI, daemon, planificador o interfaz gráfica | el acceso es db-ai; la lógica de comportamiento vive en la skill |
+| Nueva CLI, daemon, planificador o interfaz gráfica | el acceso es db-ai y el adaptador `acm` no añade dominio; la lógica de comportamiento vive en las convenciones del proyecto |
 | Modificar el núcleo de db-ai o crear esquema mediante db-ai | db-ai no hace DDL; el esquema se inicializa fuera de la herramienta |
 | Memoria global o entre proyectos | el aislamiento es por proyecto; la memoria global queda fuera de esta versión |
 | Autenticación, multiusuario o frontera de seguridad | la política de db-ai no es una frontera de seguridad frente al acceso directo al fichero (PRD de db-ai §8) |
-| Resolución automática de conflictos por LLM | ACM no depende de proveedores LLM; la reconciliación es una convención de la skill |
+| Resolución automática de conflictos por LLM | ACM no depende de proveedores LLM; la reconciliación es una convención del proyecto |
 | Sincronización remota o copia de seguridad automática | la base es local; la copia es responsabilidad del operador |
 | Captura automática de cada evento | la captura es deliberada y consolidada; no es un registro de actividad |
 | Migraciones automáticas de esquema | `schema_version` habilita migraciones manuales y revisadas |
@@ -317,13 +316,13 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 
 | ID | Requisito | Motivo | Verificación |
 |---|---|---|---|
-| NFR-ACM-01 | Composición y minimalismo: sin motor de memoria, CLI, daemon, MCP, embeddings ni dependencia de proveedor LLM; SQLite, db-ai y skill | demuestra la composición y evita deuda | revisión de dependencias y del diff; el núcleo de db-ai no cambia |
+| NFR-ACM-01 | Composición y minimalismo: sin motor de memoria, CLI, daemon, MCP, embeddings ni dependencia de proveedor LLM; SQLite, db-ai y adaptador AIF | demuestra la composición y evita deuda | revisión de dependencias y del diff; el núcleo de db-ai no cambia |
 | NFR-ACM-02 | Determinismo: orden y campos estables, identificadores UUIDv7, ETag y JSON versionado | un agente necesita resultados reproducibles y precondiciones fiables | repetición de consultas sobre fixture; pruebas de conflicto de ETag |
 | NFR-ACM-03 | Privacidad y minimización: sin conversaciones, prompts, salidas de herramientas ni secretos; directorio de memoria ignorado por Git | la memoria no debe convertirse en un registro bruto | inspección de fixture; `git check-ignore`; revisión de campos |
 | NFR-ACM-04 | Rendimiento y contexto: se respetan M-ACM-01 a M-ACM-04; límites acotados y cuerpos de texto contenidos | el contexto del agente es escaso y `grep` es lineal | arnés de ACM-05 con 10 000 filas; p95 y bytes observados |
 | NFR-ACM-05 | Compatibilidad con db-ai v0.2.0: solo operaciones documentadas; sin DDL ni triggers; PK textual no nula; política por prefijo | no se modifica el núcleo ni se asumen capacidades | `describe` muestra lectura, escritura y navegación; pruebas de política y esquema |
 | NFR-ACM-06 | Local-first: sin red; la base vive en el proyecto y funciona sin conexión | privacidad y portabilidad | ejecución con red deshabilitada; revisión de dependencias |
-| NFR-ACM-07 | Mantenibilidad: `schema_version`, migraciones aditivas y separación entre garantías del motor y convenciones de la skill | la memoria sobrevive a las sesiones y debe evolucionar | comprobación de versión de esquema; runbook de migración; revisión |
+| NFR-ACM-07 | Mantenibilidad: `schema_version`, migraciones aditivas y separación entre garantías del motor y convenciones del proyecto | la memoria sobrevive a las sesiones y debe evolucionar | comprobación de versión de esquema; runbook de migración; revisión |
 
 ## 12. Supuestos, restricciones y dependencias
 
@@ -333,7 +332,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | PK textual no nula | supuesto | una PK `TEXT NOT NULL` es navegable en db-ai | hecho observado | la tabla queda no navegable y ACM no puede usar rutas | el esquema usa `TEXT NOT NULL PRIMARY KEY`; `describe` lo confirma |
 | Bootstrap del esquema | dependencia | el operador ejecuta `init.sh`, que aplica el DDL una vez con SQLite fuera de db-ai | dependencia | no hay base utilizable | runbook y `schema_version`; `init.sh` idempotente; db-ai no hace DDL |
 | `.agent-memory/` ignorado | dependencia | el proyecto anfitrión excluye el directorio de memoria | dependencia | la memoria se versiona y se mezcla con el código | `git check-ignore`; tarea ACM-04/03 |
-| Convenciones de la skill | hipótesis | los agentes consolidan, sustituyen y revisan según la skill | hipótesis | la memoria se degrada aunque el esquema sea válido | validación ACM-05; revisión de la skill |
+| Convenciones del proyecto | hipótesis | los agentes consolidan, sustituyen y revisan según las convenciones de `AGENTS.md` | hipótesis | la memoria se degrada aunque el esquema sea válido | validación ACM-05; revisión de las convenciones |
 | Comando de versión | hecho observado | `db-ai version` existe en el árbol y responde `{version, commit, state}`; el binario instalado puede no incluirlo hasta la release | hecho | no se puede confirmar la versión por CLI con el binario publicado | C-ACM-01 implementada en el árbol; commit y release sujetos a autorización del PO (tk-22) |
 | Engram como inspiración | decisión | Engram aporta vocabulario conceptual, no código que clonar | decisión | se desviaría el alcance hacia MCP o nube | revisión de fuentes; ACM no implementa MCP |
 | Memoria por proyecto | restricción aprobada | una base por proyecto, alias `mem`, sin memoria global | decisión aprobada | se rompe el aislamiento | configuración de montaje; `project_key` en `meta` |
@@ -345,25 +344,25 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | Riesgo | Efecto sobre el resultado | Probabilidad o impacto | Mitigación | Responsable |
 |---|---|---|---|---|
 | `grep` lineal sin FTS ni ranking | recuperación lenta y recall dependiente de términos exactos | impacto medio-alto al crecer | límites, filtros por columnas, cuerpos acotados; propuesta C-ACM-02 | ingeniería |
-| Duplicados semánticos no detectados por hash | memoria redundante y decisiones confusas | impacto medio | `topic_key`, estado `needs_review`, revisión humana | skill |
-| Convenciones ignoradas por el agente | captura ruidosa, supersesión incompleta, preferencias no consultadas | impacto alto | checklist de la skill, verificación posterior, validación ACM-05 | skill y QA |
+| Duplicados semánticos no detectados por hash | memoria redundante y decisiones confusas | impacto medio | `topic_key`, estado `needs_review`, revisión humana | adaptador |
+| Convenciones ignoradas por el agente | captura ruidosa, supersesión incompleta, preferencias no consultadas | impacto alto | checklist de las convenciones, verificación posterior, validación ACM-05 | adaptador y QA |
 | Política de db-ai no es frontera de seguridad | un proceso con acceso al fichero puede saltarla | impacto de seguridad | permisos de sistema operativo; limitación declarada | operador |
 | Evolución del esquema | filas incompatibles o consultas rotas | impacto alto | `schema_version`, migraciones aditivas, copia previa | ingeniería |
-| Supersesión mal ejecutada | dos decisiones activas o pérdida de la anterior | impacto medio | insertar y sustituir en un solo lote; verificar después; sin índices parciales | skill |
-| Contexto inflado por filas completas | reanudación cara en tokens | impacto medio-alto | límites, divulgación progresiva, tope de cuerpo; propuesta C-ACM-03 | skill |
-| Commit incierto reconciliado mal | duplicado o pérdida de escritura | impacto alto | leer por identificador antes de reintentar; nunca reintentar a ciegas | skill |
+| Supersesión mal ejecutada | dos decisiones activas o pérdida de la anterior | impacto medio | insertar y sustituir en un solo lote; verificar después; sin índices parciales | adaptador |
+| Contexto inflado por filas completas | reanudación cara en tokens | impacto medio-alto | límites, divulgación progresiva, tope de cuerpo; propuesta C-ACM-03 | adaptador |
+| Commit incierto reconciliado mal | duplicado o pérdida de escritura | impacto alto | leer por identificador antes de reintentar; nunca reintentar a ciegas | adaptador |
 | Reloj y orden UUIDv7 | recencia incorrecta por desfase | impacto bajo-medio | UTC, UUIDv7 monótono, ventanas acotadas; no depender solo del identificador | ingeniería |
-| Base copiada entre proyectos | contaminación de memoria | impacto alto | `project_key` en `meta`; la skill detiene si no coincide | operador y skill |
+| Base copiada entre proyectos | contaminación de memoria | impacto alto | `project_key` en `meta`; el adaptador detiene si no coincide | operador y adaptador |
 
 ## 14. Preguntas abiertas y decisiones pendientes
 
 | Pregunta o decisión | Por qué importa | Responsable | Condición de respuesta |
 |---|---|---|---|
-| ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | **Decidido (PO, 2026-11-19): se mantiene el objetivo de M-ACM-03 (2 000 tokens)** y se ajusta la convención de recuperación de la skill al conjunto mínimo medido (7 729 B ≈ 1 933 tokens, protocolos.md §3.6); los objetivos de M-ACM-02 y M-ACM-05 quedan como están en §7 |
-| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y skill | **Decidido (PO, 2026-11-20): el agente de trabajo propone la revisión y el PO la ratifica**, con cadencia al inicio de cada sesión que toque la memoria del proyecto; el convenio ACM-04 (informar y proponer, nunca escribir durante la lectura) queda intacto |
-| ¿Qué tope de cuerpo y qué retención se aplican a filas obsoletas? | afecta contexto y crecimiento | ingeniería y PO | **Decidido (PO, 2026-11-19): sin purga automática.** Las filas obsoletas permanecen con su `status`; la purga física es mantenimiento manual autorizado. Los topes de cuerpo son convención de la skill |
+| ¿Qué objetivos exactos se fijan para M-ACM-01 a M-ACM-05? | sin objetivos acordados, la validación no es vinculante | PO | **Decidido (PO, 2026-11-19): se mantiene el objetivo de M-ACM-03 (2 000 tokens)** y se ajusta la convención de recuperación al conjunto mínimo medido y a la interfaz AIF; los objetivos de M-ACM-02 y M-ACM-05 quedan como están en §7 |
+| ¿Quién revisa la cola `needs_review` y con qué cadencia? | la memoria se degrada si nadie revisa | PO y adaptador | **Decidido (PO, 2026-11-20): el agente de trabajo propone la revisión y el PO la ratifica**, con cadencia al inicio de cada sesión que toque la memoria del proyecto; el convenio ACM-04 (informar y proponer, nunca escribir durante la lectura) queda intacto |
+| ¿Qué tope de cuerpo y qué retención se aplican a filas obsoletas? | afecta contexto y crecimiento | ingeniería y PO | **Decidido (PO, 2026-11-19): sin purga automática.** Las filas obsoletas permanecen con su `status`; la purga física es mantenimiento manual autorizado. Los topes de cuerpo son convención del proyecto |
 | ¿Las preferencias son solo del proyecto o también por agente? | cambia el modelo de datos y la recuperación | PO | **Decidido (PO, 2026-11-19): solo por proyecto.** La identidad del agente queda como procedencia, no como clave de recuperación |
-| ¿La skill marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | skill y PO | **Decidido (PO, 2026-11-20): solo informa.** La lectura nunca escribe (ACM-04); el vencimiento se detecta en el flujo de revisión (§8.7 del DESIGN), que es quien marca `needs_review` y decide el estado |
+| ¿El flujo de revisión marca `needs_review` al vencer `review_after` o solo lo informa? | evita escrituras durante la lectura, pero puede dejar memoria vieja activa | adaptador y PO | **Decidido (PO, 2026-11-20): solo informa.** La lectura nunca escribe (ACM-04); el vencimiento se detecta en el flujo de revisión (§8.7 del DESIGN), que es quien marca `needs_review` y decide el estado |
 | ¿Se necesita copia de seguridad o restauración en el alcance? | el directorio no está en Git | PO | **Decidido (PO, 2026-11-19): fuera de alcance.** Un `cp` del `.sqlite` es suficiente; no se añade nada al MVP |
 | ¿El bootstrap es un `schema.sql` con runbook o un paso del ejemplo ACM-03? | afecta reproducibilidad e instalación | PO | **Decidido (PO, 2026-11-19, revisa la decisión previa):** `init.sh` crea memoria limpia por defecto (esquema, metadatos del proyecto y montaje) y `--demo` añade el fixture de `seed.sql`; sobre una base existente no re-aplica el DDL ni toca los recuerdos |
 | ¿Qué guion de recuperación se mide para M-ACM-03? | determina el contexto de reanudación y la comparabilidad de la métrica | PO | **Decidido (PO, 2026-11-19): guion acotado** por `topic_key` de la tarea y `pref_key` aplicable (protocolos.md §1.4 y §3.6). Resultado: con `session_id` conocido, 1 444 tokens y SUPERADO; en frío, 9 058 tokens y FALLIDO por C-ACM-03; el objetivo de 2 000 tokens queda intacto |
@@ -385,7 +384,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | 2026-11-19 | 0.1.0 | Base sobre db-ai v0.2.0 | aprobada | PO | primera release acordada |
 | 2026-11-19 | 0.1.0 | Una base SQLite por proyecto en `.agent-memory/`, alias `mem` | aprobada | PO | aislamiento y permisos |
 | 2026-11-19 | 0.1.0 | UUIDv7 como PK de cada fila | aprobada | PO | orden temporal y rutas estables |
-| 2026-11-19 | 0.1.0 | La skill se desarrolla en `examples/agent-continuity` y se compone sobre db-ai | aprobada | PO | evitar un motor nuevo |
+| 2026-11-19 | 0.1.0 | El adaptador se desarrolla en `examples/agent-continuity` y se compone sobre db-ai | aprobada | PO | evitar un motor nuevo |
 | 2026-11-19 | 0.1.0 | No almacenar conversaciones completas por defecto | aprobada | PO | privacidad y contexto |
 | 2026-11-19 | 0.1.0 | Sin embeddings, MCP, CLI nueva ni dependencia LLM | aprobada | PO | KISS, YAGNI y composición |
 | 2026-11-19 | 0.1.0 | Las decisiones se modelan como observaciones con tipo decisión | propuesta | agente | una sola superficie de búsqueda y un solo ciclo de vida |
@@ -398,7 +397,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | 2026-11-19 | 0.1.0 | `init.sh` crea memoria limpia por defecto; `--demo` añade el fixture (revisa la decisión previa) | aprobada | PO | un proyecto nuevo no debe contener datos ficticios (tk-34) |
 | 2026-11-19 | 0.1.0 | Guion de reanudación acotado por `topic_key` y `pref_key`; objetivo de M-ACM-03 intacto | aprobada | PO | el guion completo no cabe en 2 000 tokens (tk-23) |
 
-Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio del esquema o de la política, validación de métricas, decisión sobre las preguntas de §14, o cambio del alcance de la skill.
+Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio del esquema o de la política, validación de métricas, decisión sobre las preguntas de §14, o cambio del alcance del adaptador.
 
 ## 17. Mapa de evidencia y límites
 
@@ -406,20 +405,20 @@ Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio 
 |---|---|---|---|---|
 | db-ai expone rutas, ETag, política por prefijo, batch y auditoría | hecho | PRD y DESIGN de db-ai | PRD de db-ai §5 y §7; DESIGN de db-ai §3, §8, §9, §11 | contratos; la integración con el esquema se probó, no la auditoría de db-ai |
 | db-ai expone `version` en el árbol, con `{version, commit, state}` | hecho | ejecución observada y documentación | `db-ai version`; DESIGN de db-ai §3; README y CHANGELOG | el binario instalado puede devolver `E_USAGE` hasta la release; sin `ldflags`, `commit` es `unknown` |
-| db-ai busca texto literal, sensible a mayúsculas, sin FTS | hecho | DESIGN de db-ai y skill local `db-ai` | DESIGN de db-ai §7; `src/db-ai/references/comandos.md` | no se mide recall ni latencia |
+| db-ai busca texto literal, sensible a mayúsculas, sin FTS | hecho | DESIGN de db-ai | DESIGN de db-ai §7 | no se mide recall ni latencia |
 | db-ai no expone proyección ni orden descendente en `find`/`export` | hecho | ayuda observada y DESIGN de db-ai | `find --help`, `export --help`; DESIGN de db-ai §3 frente a §6 | puede cambiar en una versión futura |
 | Una PK textual sin `NOT NULL` deja la tabla no navegable | hecho | `describe` observado sobre base temporal | DESIGN de ACM §4.1 y §15 | observado en el entorno de trabajo |
 | Engram usa sesiones, observaciones, `topic_key`, revisión y conflictos | hecho | documentación de Engram | GitHub `docs/ARCHITECTURE.md` | inspiración conceptual; no se clona ni se atribuye la misma implementación |
 | El problema de continuidad existe para agentes en este repositorio | inferencia | `AGENTS.md`, tablero y modelo de trabajo | §4 | sin entrevistas ni analítica; no se mide su magnitud |
 | La memoria acotada reduce el contexto de reanudación | hecho medido | benchmark con 10 240 observaciones y prueba con dos agentes | [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8; [evidence-agents.md](../scenarios/evidence/evidence-agents.md) | con `session_id` conocido cumple 1 444 tokens; en frío falla (9 058) por C-ACM-03; M-ACM-05 ratificada por el PO el 2026-11-20 |
-| La skill `agent-continuity` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh`, `skill/` y `scenarios/evidence/` | la implementación vive en el árbol; su disponibilidad en el binario instalado depende de la release |
-| Una base por proyecto, UUIDv7 y skill en `examples/` | decisión aprobada | PO, encargo tk-18 | §16 | no consta en un documento versionado aparte del tablero |
+| El adaptador `acm` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh`, `tools/acm.py` y `scenarios/evidence/` | la implementación vive en el árbol; su disponibilidad en el binario instalado depende de la release |
+| Una base por proyecto y UUIDv7 en `examples/` | decisión aprobada | PO, encargo tk-18 | §16 | no consta en un documento versionado aparte del tablero |
 | db-ai v0.2.0 es la primera release | decisión aprobada | PO, encargo tk-18 | §16 | sujeta a la versión desplegada |
-| No se guardan conversaciones completas por defecto | decisión aprobada | PO, encargo tk-18 | §8.2 y §16 | la skill debe demostrar que cumple |
+| No se guardan conversaciones completas por defecto | decisión aprobada | PO, encargo tk-18 | §8.2 y §16 | el adaptador debe demostrar que cumple |
 
 ### Límites de la verificación
 
-- ACM está implementado en el árbol: `init.sh`, el esquema y la skill `skill/` existen y se ejecutaron. Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin la skill.
+- ACM está implementado en el árbol: `init.sh`, el esquema y el adaptador `tools/acm.py` existen y se ejecutaron. Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin el adaptador.
 - M-ACM-01 a M-ACM-04 están medidas sobre un fixture determinista de 10 240 observaciones y M-ACM-05 con dos agentes reales, ratificada como evaluación humana por el PO el 2026-11-20. Veredictos en §7 y §17.
 - No se hicieron entrevistas ni observación de usuarios; las personas se sostienen en artefactos del repositorio.
 - `db-ai version` existe en el árbol y devuelve `{version, commit, state}`, pero el binario instalado puede no exponerlo hasta la release y, sin `ldflags`, `commit` es `unknown` (DESIGN de db-ai §3; DESIGN §14 C-ACM-01).
