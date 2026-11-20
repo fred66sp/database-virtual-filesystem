@@ -23,6 +23,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -141,6 +142,12 @@ def require_text(value: str | None, name: str) -> str:
     return text
 
 
+def normalize(text: str) -> str:
+    """Clave de comparación: sin mayúsculas ni acentos; sin stemming."""
+    return "".join(char for char in unicodedata.normalize("NFD", text.casefold())
+                   if not unicodedata.combining(char))
+
+
 def session_view(session: dict) -> dict:
     # db-ai renders SQL NULL as "", so the JSON contract keeps null here.
     return {"id": session.get("id"), "agent_id": session.get("agent_id"),
@@ -151,14 +158,26 @@ def session_view(session: dict) -> dict:
 
 
 def consolidate(observation_id: str, row: dict, timestamp: str) -> dict:
-    """Suma una repetición a una fila existente; una sola escritura con ETag."""
-    count = int(fields(row)["duplicate_count"]) + 1
-    db_ai("write", f"/{ALIAS}/observations/{observation_id}",
-          "--if-match", row["etag"], "--data", json.dumps(
-              {"duplicate_count": count, "last_seen_at": timestamp,
-               "updated_at": timestamp}))
-    return {"result": "consolidated", "id": observation_id,
-            "duplicate_count": count}
+    """Suma una repetición; ante E_CONFLICT relee y reintenta (máx 3)."""
+    for attempt in range(3):
+        count = int(fields(row)["duplicate_count"]) + 1
+        try:
+            db_ai("write", f"/{ALIAS}/observations/{observation_id}",
+                  "--if-match", row["etag"], "--data", json.dumps(
+                      {"duplicate_count": count, "last_seen_at": timestamp,
+                       "updated_at": timestamp}))
+        except AcmError as exc:
+            if exc.code != "E_CONFLICT" or attempt == 2:
+                raise
+            # Otro proceso consolidó antes: el ETag es obsoleto, releer la fila.
+            found = rows(f"/{ALIAS}/observations",
+                         f"content_hash={fields(row)['content_hash']}", limit=1)
+            if not found:
+                raise
+            row = found[0]
+            continue
+        return {"result": "consolidated", "id": observation_id,
+                "duplicate_count": count}
 
 
 # --- comandos ----------------------------------------------------------------
@@ -316,22 +335,25 @@ def cmd_close(args: argparse.Namespace) -> dict:
 def cmd_search(args: argparse.Namespace) -> dict:
     sid = session_id(args)
     load_session(sid)
-    query = require_text(args.query, "--query")
+    query = (args.query or "").strip()
+    terms = re.findall(r"\w+", normalize(query))
+    if not terms:
+        raise AcmError("E_USAGE", "query vacía")
     limit = max(1, min(args.limit, 100))
-    entries = db_ai("grep", f"/{ALIAS}/observations", query,
-                    "--limit", str(limit))["entries"]
-    seen: list[str] = []
-    for entry in entries:
-        if entry["row"] not in seen:
-            seen.append(entry["row"])
+    # status=active va en el filtro, antes del límite; 1000 es el máximo de --limit.
+    # shortcut: no hay paginación, más de 1000 observaciones activas se truncan.
+    candidates = rows(f"/{ALIAS}/observations", "status=active", limit=1000)
     results = []
-    for path in seen:
-        observation = fields(db_ai("cat", path))
-        if observation["status"] != "active":
-            continue
-        results.append({k: observation.get(k) for k in (
-            "id", "kind", "title", "body", "topic_key", "session_id",
-            "created_at")})
+    for row in candidates:
+        observation = fields(row)
+        haystack = normalize(" ".join(str(observation.get(key) or "") for key in
+                                      ("title", "body", "topic_key")))
+        if all(term in haystack for term in terms):
+            results.append({k: observation.get(k) for k in (
+                "id", "kind", "title", "body", "topic_key", "session_id",
+                "created_at")})
+            if len(results) == limit:
+                break
     return {"ok": True, "query": query, "count": len(results),
             "results": results}
 
