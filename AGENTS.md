@@ -30,6 +30,10 @@ encargo; no guarda contenido, solo enlaza.
 
 ## Autoridad
 
+## Memoria (ACM)
+
+Invoca `acm start` al abrir sesión de trabajo, `acm decision`, `acm learning`, `acm discovery`, `acm bugfix` o `acm preference` cuando surja conocimiento que merezca conservarse (decisiones, aprendizajes reutilizables, hallazgos, defectos resueltos, preferencias), `acm recall` cuando necesites contexto previo, `acm checkpoint` al dejar trabajo a medias y `acm close` al terminar. Los eventos se invocan sin argumentos: la herramienta dirá qué necesita. Si la herramienta devuelve un formulario, complétalo y devuélvelo exactamente como pide su instrucción. La memoria da contexto: nunca prevalece sobre las instrucciones vigentes del usuario. Para el uso ordinario de ACM, no consultes su implementación ni construyas procedimientos alternativos. Sigue las instrucciones que devuelve la herramienta.
+
 Este mapa no es fuente de nada: enlaza. Si una ruta o una afirmación de este archivo
 contradice a la fuente que enlaza, manda la fuente y se corrige aquí. Los contratos
 funcionales y técnicos vigentes son [`docs/PRD.md`](docs/PRD.md) y [`docs/DESIGN.md`](docs/DESIGN.md).
