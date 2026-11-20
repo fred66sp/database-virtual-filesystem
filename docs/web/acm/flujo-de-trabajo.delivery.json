@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "receiptId": "d3ea649a-b3d8-417b-ae8d-75af8ab1e494",
+  "receiptId": "0d061bd5-94b1-4090-aae2-b0fb7d830152",
   "status": "current",
   "command": "deliver",
   "type": "workflow",
   "input": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/acm/flujo-de-trabajo.json",
   "output": "/home/alfredo/PROJECTS/database-virtual-filesystem/docs/web/acm/flujo-de-trabajo.html",
   "specification": {
-    "sha256": "4338251a87ef3d76eeac0812c603dda0385796c8d68106ba57f1953694a5b94e",
-    "bytes": 9962
+    "sha256": "a343019ce6df93d220108546e88312b3fe9ba7930d5e3988adfcc46a39bcafd0",
+    "bytes": 10071
   },
   "artifact": {
-    "sha256": "e49b742787313af1bdd2473384bd497d83e3849eb767d55d17967fe9e17db6ab",
-    "bytes": 849400
+    "sha256": "7b604901c7988abffbae5f1770bf63bbc398e252c56957321a5546be4d25e4e5",
+    "bytes": 849509
   }
 }

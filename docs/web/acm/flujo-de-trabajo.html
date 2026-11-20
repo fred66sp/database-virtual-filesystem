@@ -5793,7 +5793,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <ul>
           <li>Antes de escribir, mounts confirma el alias y meta el project_key; si no coincide, el adaptador se detiene</li>
           <li>El conjunto de reanudación son cuatro find filtrados: checkpoint activo, observaciones de la sesión, decisiones activas y preferencias activas</li>
-          <li>ACM-05 midió ese conjunto en 7 729 bytes ≈ 1 933 tokens; añadir el listado de sesiones o un cat redundante lo superó</li>
+          <li>La reanudación la resuelve `acm start` en una sola invocación; el coste medido de una sesión de continuidad es de 21 invocaciones y 22.9k tokens (n=1, declarado en el README del ejemplo)</li>
         </ul>
       </div>
 
@@ -5805,7 +5805,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <ul>
           <li>Se captura conocimiento durable, decisiones con rationale y checkpoints; nunca conversaciones, prompts ni salidas de herramientas</li>
           <li>El content_hash se calcula con tools/content-hash.py: NFC, array JSON canónico y SHA-256; el esquema garantiza formato y unicidad</li>
-          <li>Una segunda captura idéntica devuelve E_CONSTRAINT; se busca la fila por hash y se actualizan duplicate_count y last_seen_at, sin reintentar</li>
+          <li>Una segunda captura idéntica consolida la fila existente: el adaptador actualiza duplicate_count y last_seen_at y reintenta ante E_CONFLICT; el agente no gestiona el hash a mano</li>
         </ul>
       </div>
 
