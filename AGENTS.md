@@ -15,6 +15,7 @@ encargo; no guarda contenido, solo enlaza.
 | Trabajo del repositorio: crear, mover, bloquear y cerrar tareas | [`.tasks-ai/AGENTS.md`](.tasks-ai/AGENTS.md) |
 | Etiquetas: tipos, estructura, ámbito y catálogo | [`.tasks-ai/CONTRATO_ETIQUETAS.md`](.tasks-ai/CONTRATO_ETIQUETAS.md) → «2. Asignación correcta a una tarea» |
 | Catálogo enlazable para agentes | [`llms.txt`](llms.txt) |
+| Documentación web navegable y su previsualización local | [`docs/web/index.html`](docs/web/index.html) — contratos de db-ai y ACM; [`serve-web.sh`](serve-web.sh) la sirve en `http://127.0.0.1:8891` (arranque, `status`, `stop`) |
 | Configuración de plugins de OpenCode | [`opencode.jsonc`](opencode.jsonc) |
 
 ## Encargo → qué leer antes → con qué se cierra
