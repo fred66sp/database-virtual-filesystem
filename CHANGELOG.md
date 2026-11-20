@@ -5,6 +5,33 @@ Todos los cambios notables de este proyecto se documentan en este fichero.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-11-20
+
+### Añadido
+
+- `find` y `cat` de fila aceptan `--fields`, que proyecta solo la presentación a
+  las columnas pedidas más la PK; la fila se sigue leyendo completa y el ETag no
+  cambia (ADR-006). Columna desconocida, repetida o vacía devuelve `E_USAGE`, y
+  la proyección queda ligada al cursor firmado (REF-01).
+- `find` acepta `--order 'columna:asc|desc,...'`, con `asc` por defecto,
+  desempate por el resto de la PK y NULLS LAST en ambas direcciones; el orden
+  resuelto viaja en el cursor firmado y el orden nativo anterior queda intacto
+  sin el flag (REF-02).
+- `find` y `grep` aceptan `--count`, que devuelve `{"count":N}` con los mismos
+  filtros y políticas, ignora `--limit` para el recuento, es incompatible con
+  `--cursor` (`E_USAGE`) y funciona en tablas sin PK (REF-03).
+- `upsert PATH --data '{...}' [--if-match ETAG] [--dry-run]`: crea o actualiza
+  por la PK con la rama resuelta dentro de `BEGIN IMMEDIATE`, permisos `touch` y
+  `write` respectivos, `--if-match` obligatorio al actualizar y auditoría de la
+  operación real (`created`/`updated`) (REF-04).
+
+### Modificado
+
+- DESIGN §3, §7, §8, §9 y §10 documentan la superficie nueva, el vocabulario
+  completo de `ops` de la política —lectura, mutación y `batch` comprobado por
+  elemento— y el orden de emisión de `fields`: byte-wise sin proyección y orden
+  de catálogo con `--fields`.
+
 ## [0.3.0] - 2026-11-19
 
 ### Añadido

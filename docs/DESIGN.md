@@ -1,6 +1,6 @@
 # db-ai — Technical Design
 
-**Versión:** 0.2.0 · **Estado:** línea base aprobada por el PO el 2026-11-19 · **Requisitos:** [PRD.md](PRD.md) v0.2.0
+**Versión:** 0.4.0 · **Estado:** línea base aprobada por el PO el 2026-11-19 · **Requisitos:** [PRD.md](PRD.md) v0.2.0
 
 ## 1. Principios y arquitectura
 
@@ -54,12 +54,13 @@ db-ai ls [PATH] [--limit N] [--cursor TOKEN]
 db-ai tree [PATH] [--depth N] [--limit N]
 db-ai stat PATH
 db-ai describe PATH
-db-ai cat PATH
+db-ai cat PATH [--fields LIST]
 db-ai --session ID cd PATH
 db-ai --session ID pwd
-db-ai find PATH [--where EXPR]... [--limit N] [--cursor TOKEN]
-db-ai grep PATH TEXT [--limit N] [--cursor TOKEN]
+db-ai find PATH [--where EXPR]... [--order SPEC] [--fields LIST] [--count] [--limit N] [--cursor TOKEN]
+db-ai grep PATH TEXT [--fields LIST] [--count] [--limit N] [--cursor TOKEN]
 db-ai touch PATH --data JSON|-
+db-ai upsert PATH --data JSON|- [--if-match ETAG]
 db-ai write ROW_OR_FIELD --data JSON|- --if-match ETAG
 db-ai cp ROW DEST_ROW --if-match ETAG
 db-ai mv ROW DEST_ROW --if-match ETAG --apply
@@ -69,6 +70,8 @@ db-ai export PATH [--where EXPR]... [--format json|jsonl] [--limit N] [--cursor 
 ```
 
 Flags globales `--json`, `--session`, `--timeout`, `--actor`; `--dry-run` para mutaciones, incompatible con `--apply`. `describe`, `find`, `grep`, `touch` y `export` reciben una ruta VFS (`/alias/table`), no un nombre de tabla. `--apply` es obligatorio solo en `mv` y `rm`. `--json` se acepta sin efecto: JSON es el formato por defecto y único del MVP. `-` lee stdin una sola vez. JSON malformado o claves duplicadas se rechazan. `--apply` es confirmación no interactiva de las operaciones destructivas, no permiso. La raíz es `/`; sin sesión, las rutas relativas se rechazan; `ls` sin argumento lista raíz o cwd de sesión. Flags desconocidos producen error. `--help` no abre bases. La forma preferida del filtro de ejemplo del PRD es `--where 'status=pending'`; los espacios exteriores del valor no son significativos. `version` es un subcomando, no un flag global: no abre bases y emite en `data` `{version, commit, state}` —versión funcional, revisión Git inyectada al compilar con `-ldflags -X` (`unknown` si no se inyectó) y estado de build `dev` o `release`.
+
+`--fields` recibe una lista separada por comas de columnas de la tabla y proyecta solo la presentación: la fila se lee completa para el ETag y la PK se emite siempre. `--order` recibe `columna[:asc|desc]` separados por comas, `asc` por defecto. `--count` sustituye la página por el recuento de filas que cumplen los filtros. `upsert` crea o actualiza por la clave primaria de destino.
 
 ## 4. Identidad y rutas (FR-02–04, NFR-02,07)
 
@@ -155,6 +158,12 @@ Son contratos de partida, no código completo. Los servicios verifican política
 
 Ordenar por clave primaria con orden explícito y paginación keyset. Cursor `base64url` de `{v, montaje, tabla, filtros, orden, última_clave}` firmado con HMAC y una clave de la configuración; un cursor falsificado o inválido devuelve `E_USAGE`. No es snapshot entre invocaciones; cambios concurrentes pueden afectar recorrido. Tablas sin identidad estable: ordenar por todas las columnas autorizadas con tipos y colación explícitos; limitar a primera página y marcar truncamiento, sin cursor si no hay orden total. Si la columna de orden no está autorizada por política, la paginación más allá de la página 1 devuelve `E_DENIED`. En tablas no navegables, `ls` y `cat` devuelven `E_UNSUPPORTED`, `tree` las muestra como contenedores vacíos, `stat` informa `navigable:false`, y `find`, `grep` y `export` se permiten solo en la primera página. Exportación aplica los mismos permisos y límites que find.
 
+Proyección (`--fields`): es una optimización de volumen de salida y de contexto del agente, no una proyección SQL. El adaptador sigue leyendo la fila completa —el ETag cubre todos los valores y no cambia con la proyección (ADR-006)— y el render emite solo las columnas pedidas más la PK, en orden de catálogo. Una columna desconocida, repetida o vacía devuelve `E_USAGE`. El cursor se firma con la proyección canónica, así que cambiar de `--fields` entre páginas rompe la ligadura y devuelve `E_USAGE`. Una tabla denegada devuelve el mismo error con y sin `--fields`. En `cat`, `--fields` solo aplica a una fila: en una tabla devuelve `E_UNSUPPORTED` y en un campo `E_USAGE`.
+
+Orden (`--order`): `columna:asc|desc` separados por comas, `asc` por defecto, y el resto de la PK desempata siempre para que el orden sea total. NULLS LAST en ambas direcciones; tipos mixtos siguen el orden nativo de SQLite. Sin `--order` se mantiene el orden nativo anterior por PK ascendente. El orden resuelto y el tratamiento de NULL viajan en el payload firmado del cursor y un cursor presentado con otra ordenación devuelve `E_USAGE`. Una tabla sin PK conserva la primera página sin cursor (D-12). No hay SQL arbitrario en la especificación de orden.
+
+Recuento (`--count`): `find` y `grep` devuelven `{"count":N}` con un `COUNT(*)` sobre los mismos filtros y políticas; en `grep` cuenta filas distintas que contienen la coincidencia, no apariciones. Es incompatible con `--cursor` (`E_USAGE`); `--limit` no afecta al recuento, pero un valor fuera de rango sigue devolviendo `E_LIMIT`; `--fields` y `--order` se validan aunque se ignoren. Funciona en tablas sin PK.
+
 ## 8. Mutaciones (FR-06–10,12; NFR-03,04)
 
 - touch: INSERT con columnas explícitas; no inventar valores obligatorios; omisiones utilizan defaults nativos. Devolver clave efectiva; rechazar tabla no navegable.
@@ -162,6 +171,7 @@ Ordenar por clave primaria con orden explícito y paginación keyset. Cursor `ba
 - cp: INSERT de campos ordinarios de origen con PK destino explícita; `--if-match` referencia la fila origen; no copiar columnas generadas ni relaciones. Restricciones UNIQUE pueden impedir copia.
 - mv: UPDATE de PK simple; denegar referencias entrantes, PK generada, clave compuesta y destino existente.
 - rm: DELETE de una fila; no recursivo; bloquear si existen referencias entrantes con potencial efecto indirecto.
+- upsert: INSERT o UPDATE por la clave primaria de destino, con la rama resuelta dentro del mismo `BEGIN IMMEDIATE`. `--data` es el mapa de campos con la PK incluida. Crear exige el permiso `touch`; actualizar exige `write`. Actualizar una fila existente exige `--if-match` con el ETag vigente: sin él devuelve `E_USAGE`, y con `--if-match` sobre una fila inexistente también `E_USAGE` sin crear. Un ETag obsoleto devuelve `E_CONFLICT`. El destino solo puede ser la PK; una tabla en la que solo una UNIQUE resuelva la fila devuelve `E_UNSUPPORTED`. Un choque incidental en otra UNIQUE devuelve `E_CONSTRAINT` sin escribir. La salida es `{"result":"created"|"updated","applied":bool,"path":…,"etag":…}`, con `etag` solo cuando se aplicó; `--dry-run` devuelve `applied:false` sin efectos. La auditoría registra la operación real, `created` o `updated`.
 
 Una operación que requiere leer fila completa (ETag, copia) se deniega si el actor no tiene acceso completo a esa fila. Triggers de escritura sobre la tabla objetivo se rechazan en MVP, incluso si parecen inocuos. Rechazar FK con efectos de cascada o SET NULL/DEFAULT para la operación afectada, de forma conservadora. Activar foreign_keys por conexión y verificarlo. No usar INSERT OR REPLACE ni desactivar restricciones.
 
@@ -181,6 +191,15 @@ Batch: array de operaciones explícitas, máximo 100 como valor por defecto y co
 
 Configuración y políticas editables por operador; cambios bajo bloqueo y reemplazo atómico en mismo directorio, permisos 0600 y directorios 0700 en Linux. Sin política, montaje ro con lectura solo de tablas ordinarias permitidas por defecto; rw no concede escritura por sí solo. Política explícita reemplaza defaults; deny por defecto, comparación por segmentos, nunca prefijos string. Ancestros se pueden mostrar solo como contenedores de recursos autorizados. No exponer columnas, conteos, filtros ni errores de otros recursos prohibidos. Esquema, claves y dependencias que no puedan exponerse sin fuga implican denegación.
 
+Vocabulario completo de `ops`:
+
+| Categoría | Operaciones |
+|---|---|
+| Lectura | `cat`, `find`, `grep`, `export`, `ls`, `tree`, `stat`, `describe` |
+| Mutación | `touch`, `write`, `cp`, `mv`, `rm`, `upsert` |
+
+`batch` no es una operación autorizable: cada elemento se comprueba con la operación real que ejecuta. `--fields` y `--count` no añaden superficie: se autorizan con `cat`, `find` o `grep`. `mount` y `umount` no pasan por la política.
+
 Sesión: ID explícito ASCII seguro, cwd persistido en `$XDG_STATE_HOME/db-ai/sessions/<id>.json` (fallback `~/.local/state/db-ai`), actualización bajo bloqueo. Cada agente usa ID propio; no sesión global. `cd` valida destino contenedor y permiso; `pwd` revalida cwd; alias desmontado devuelve E_STALE_SESSION. `cd` y `pwd` sin `--session` devuelven E_USAGE; el resto de operaciones son stateless sin sesión. Shell interactivo futuro reutiliza dispatcher y mantiene cwd en memoria.
 
 ## 10. Salida y errores (FR-11, NFR-01,05)
@@ -196,7 +215,7 @@ Formas de salida: un único objeto fila `{path, fields, etag}` compartido por `c
 
 `request_id`: flag opcional `--request-id` del cliente; si falta, lo genera el servidor; siempre en `meta.request_id`.
 
-Representación tipada conserva enteros de 64 bits y BLOB en base64 estándar con padding (RFC 4648); REAL decimal reversible y no finitos explícitamente no soportados: un REAL no finito al leer devuelve `E_UNSUPPORTED`; NULL usa kind null y data vacío. El objeto `fields` de la salida emite sus claves en orden byte-wise ascendente: la serialización JSON de un mapa en Go ordena las claves y es determinista; la estructura interna `Row.Fields` conserva el orden de catálogo. Entrada admite valores JSON naturales o envoltorios tipados; números se parsean sin pasar por float64 si enteros. JSONL exporta una fila por línea; errores a stderr y código no cero si flujo parcial. El resto de comandos JSON emite exactamente un objeto a stdout incluso ante error; logs y diagnósticos a stderr. Orden canónico; no timestamps en lecturas. Presupuestos de salida, páginas y tiempo se aplican antes de emitir éxito; error si una fila individual excede límite. Valores aprobados (NFR-05, por defecto y máximo): 1000 registros por página (`--limit` > 1000 → `E_LIMIT`), 16 MiB de salida, profundidad máxima de `tree` 4 y `--timeout` entre 1 y 60 s con defecto 5 s.
+Representación tipada conserva enteros de 64 bits y BLOB en base64 estándar con padding (RFC 4648); REAL decimal reversible y no finitos explícitamente no soportados: un REAL no finito al leer devuelve `E_UNSUPPORTED`; NULL usa kind null y data vacío. El objeto `fields` de la salida emite sus claves en orden byte-wise ascendente cuando no hay proyección: la serialización JSON de un mapa en Go ordena las claves y es determinista. Con `--fields` la salida conserva el orden de catálogo de las columnas pedidas y añade siempre la PK; la estructura interna `Row.Fields` conserva en todo caso el orden de catálogo. Entrada admite valores JSON naturales o envoltorios tipados; números se parsean sin pasar por float64 si enteros. JSONL exporta una fila por línea; errores a stderr y código no cero si flujo parcial. El resto de comandos JSON emite exactamente un objeto a stdout incluso ante error; logs y diagnósticos a stderr. Orden canónico; no timestamps en lecturas. Presupuestos de salida, páginas y tiempo se aplican antes de emitir éxito; error si una fila individual excede límite. Valores aprobados (NFR-05, por defecto y máximo): 1000 registros por página (`--limit` > 1000 → `E_LIMIT`), 16 MiB de salida, profundidad máxima de `tree` 4 y `--timeout` entre 1 y 60 s con defecto 5 s.
 
 Auditoría (§11): la redacción del recurso sigue la política del actor; la PK autorizada se registra completa y la PK no autorizada se registra como SHA-256 truncado más la tabla.
 
