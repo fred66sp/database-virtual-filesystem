@@ -5195,7 +5195,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <div class="pulse-dot"></div>
         <h1>Arquitectura de ACM</h1>
       </div>
-      <p class="subtitle">Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y una skill que fija las convenciones de captura y recuperación.</p>
+      <p class="subtitle">Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y un adaptador (interfaz AIF) que fija las convenciones de captura y recuperación.</p>
     </div>
 
 
@@ -5205,7 +5205,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
          data-preset-badge-editorial-plate="ARCHIFY / LÁMINA 04">
       <svg viewBox="0 0 1090 544" role="img" lang="es" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="classic" data-quality-profile="showcase" data-node-ui="" data-reader-fit="width-first" data-reader-min-text="7.5" data-reader-primary-text="14">
         <title id="archify-diagram-title">Arquitectura de ACM</title>
-        <desc id="archify-diagram-description">Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y una skill que fija las convenciones de captura y recuperación.</desc>
+        <desc id="archify-diagram-description">Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y un adaptador (interfaz AIF) que fija las convenciones de captura y recuperación.</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -5269,7 +5269,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </g>
         <g data-graph-role="automatic-crossover" style="--step:3">
           <path data-graph-role="automatic-crossover-underlay" d="M 178 204 L 178 240" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="skill-acm" data-edge-to="skill-dbai" data-edge-label="consulta formas" data-edge-key="3" data-edge-id="consulta-formas" data-composition-points="178,204;178,240" data-composition-crossover="halo" data-composition-independent="true" d="M 178 204 L 178 240" class="a-dashed" data-animate="edge" style="--step:3" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-edge-from="skill-acm" data-edge-to="skill-dbai" data-edge-label="encapsula las formas" data-edge-key="3" data-edge-id="consulta-formas" data-composition-points="178,204;178,240" data-composition-crossover="halo" data-composition-independent="true" d="M 178 204 L 178 240" class="a-dashed" data-animate="edge" style="--step:3" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:4">
           <path data-graph-role="automatic-crossover-underlay" d="M 330 180.05 L 380 180.05" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
@@ -5328,8 +5328,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="context" x="405" y="82" class="t-muted" font-size="9" text-anchor="middle">consulta</text>
         </g>
 
-        <g id="node-skill-acm" data-node-id="skill-acm" data-node-label="Skill agent-continuity" tabindex="0" role="button" aria-label="Enfocar Skill agent-continuity, siete protocolos de comportamiento, Componente de arquitectura" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="siete protocolos de comportamiento" data-node-context="Componente de arquitectura">
-          <title>Skill agent-continuity · siete protocolos de comportamiento · Componente de arquitectura</title>
+        <g id="node-skill-acm" data-node-id="skill-acm" data-node-label="Adaptador acm.py (AIF)" tabindex="0" role="button" aria-label="Enfocar Adaptador acm.py (AIF), eventos AIF y formularios, Componente de arquitectura" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="eventos AIF y formularios" data-node-context="Componente de arquitectura">
+          <title>Adaptador acm.py (AIF) · eventos AIF y formularios · Componente de arquitectura</title>
           <rect x="40" y="140" width="290" height="64" rx="8" class="c-mask"/>
           <rect x="40" y="140" width="290" height="64" rx="8" class="c-frontend" data-animate="node" style="--step:1" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 146) scale(0.6875)">
@@ -5338,8 +5338,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="185" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Skill agent-continuity</text>
-        <text data-detail="context" x="185" y="186" class="t-muted" font-size="9" text-anchor="middle">siete protocolos de comportamiento</text>
+          <text data-node-label="" data-detail-anchor="" x="185" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Adaptador acm.py (AIF)</text>
+        <text data-detail="context" x="185" y="186" class="t-muted" font-size="9" text-anchor="middle">eventos AIF y formularios</text>
         </g>
 
         <g id="node-cli" data-node-id="cli" data-node-label="CLI db-ai" tabindex="0" role="button" aria-label="Enfocar CLI db-ai, rutas /mem · ETag · transacción, Componente de arquitectura" aria-pressed="false" data-node-kind="backend" data-node-sublabel="rutas /mem · ETag · transacción" data-node-context="Componente de arquitectura">
@@ -5486,7 +5486,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="469.8" y="72" width="48.4" height="14" rx="3" class="c-mask"/>
           <text x="494" y="82" class="t-edge-dashed" font-size="8" text-anchor="middle">consulta</text>
         </g>
-        <g data-detail="context" data-edge-from="skill-acm" data-edge-to="skill-dbai" data-edge-label="consulta formas" data-edge-key="3" data-edge-id="consulta-formas">
+        <g data-detail="context" data-edge-from="skill-acm" data-edge-to="skill-dbai" data-edge-label="encapsula las formas" data-edge-key="3" data-edge-id="consulta-formas">
           <rect x="90" y="215" width="82" height="14" rx="3" class="c-mask"/>
           <text x="131" y="225" class="t-edge-dashed" font-size="8" text-anchor="middle">consulta formas</text>
         </g>

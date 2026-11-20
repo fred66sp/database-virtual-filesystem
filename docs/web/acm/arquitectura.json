@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Arquitectura de ACM",
-    "subtitle": "Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y una skill que fija las convenciones de captura y recuperación.",
+    "subtitle": "Tres piezas que ya existen: una base SQLite por proyecto, la CLI db-ai como interfaz y un adaptador (interfaz AIF) que fija las convenciones de captura y recuperación.",
     "locale": "es",
     "output": "docs/web/acm/arquitectura.html",
     "quality_profile": "showcase"
@@ -57,8 +57,8 @@
     {
       "id": "skill-acm",
       "type": "frontend",
-      "label": "Skill agent-continuity",
-      "sublabel": "siete protocolos de comportamiento",
+      "label": "Adaptador acm.py (AIF)",
+      "sublabel": "eventos AIF y formularios",
       "pos": [
         40,
         140
@@ -270,7 +270,7 @@
       "id": "consulta-formas",
       "from": "skill-acm",
       "to": "skill-dbai",
-      "label": "consulta formas",
+      "label": "encapsula las formas",
       "variant": "dashed"
     },
     {
