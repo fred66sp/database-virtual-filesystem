@@ -60,14 +60,18 @@ func (r *reader) Apply(ctx context.Context, m storage.Mutation) (storage.Row, er
 	if len(t.Triggers) > 0 {
 		return storage.Row{}, fmt.Errorf("%w: table %q has triggers, so writes are denied", storage.ErrUnsupported, m.Table)
 	}
-	if err := r.denyCascades(t, m.Kind); err != nil {
-		return storage.Row{}, err
+	if m.Kind != "upsert" {
+		if err := r.denyCascades(t, m.Kind); err != nil {
+			return storage.Row{}, err
+		}
 	}
 	switch m.Kind {
 	case "touch":
 		return r.insert(ctx, t, m.Fields)
 	case "write":
 		return r.update(ctx, t, m.Key, m.Fields, m.IfMatch)
+	case "upsert":
+		return r.upsert(ctx, t, m.Key, m.Fields, m.IfMatch)
 	case "cp":
 		return r.copyRow(ctx, t, m.Key, m.Destination, m.IfMatch)
 	case "mv":
@@ -288,6 +292,83 @@ func (r *reader) insert(ctx context.Context, t *catalog.Table, fields map[string
 	key, err := effectiveKey(t, fields, res)
 	if err != nil {
 		return storage.Row{}, err
+	}
+	return r.Get(ctx, t.Name, key)
+}
+
+// upsert is REF-04: one INSERT ... ON CONFLICT(<primary key>) DO UPDATE inside
+// the caller's IMMEDIATE transaction. The destination is the primary key; a
+// conflict on any other UNIQUE aborts the statement, which classify turns into
+// E_CONSTRAINT, so the upsert never updates a row the caller did not identify.
+// The ETag precondition is mandatory for an existing row and compared here, in
+// the same transaction, before any SQL runs.
+func (r *reader) upsert(ctx context.Context, t *catalog.Table, key storage.Key, fields map[string]storage.Value, ifMatch string) (storage.Row, error) {
+	current, getErr := r.Get(ctx, t.Name, key)
+	exists := getErr == nil
+	if getErr != nil && !errors.Is(getErr, storage.ErrNotFound) {
+		return storage.Row{}, getErr
+	}
+	kind := "touch"
+	if exists {
+		kind = "write"
+		if ifMatch == "" {
+			return storage.Row{}, fmt.Errorf("%w: upsert of an existing row requires an ETag precondition", storage.ErrInvalid)
+		}
+		if current.ETag != ifMatch {
+			return storage.Row{}, fmt.Errorf("%w: ETag %q no longer matches table %q", storage.ErrConflict, ifMatch, t.Name)
+		}
+	} else if ifMatch != "" {
+		return storage.Row{}, fmt.Errorf("%w: ETag precondition given for a row that does not exist in table %q", storage.ErrInvalid, t.Name)
+	}
+	if err := r.denyCascades(t, kind); err != nil {
+		return storage.Row{}, err
+	}
+
+	names, err := writeNames(t, fields, true)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	columns := make([]string, len(names))
+	placeholders := make([]string, len(names))
+	args := make([]any, len(names))
+	for i, name := range names {
+		columns[i] = quoteIdent(name)
+		placeholders[i] = "?"
+		arg, err := bindValue(fields[name])
+		if err != nil {
+			return storage.Row{}, err
+		}
+		args[i] = arg
+	}
+	pk := t.PrimaryKey()
+	conflict := make([]string, len(pk))
+	for i, column := range pk {
+		conflict[i] = quoteIdent(column.Name)
+	}
+	query := "INSERT INTO " + quoteIdent(t.Name) + " (" + strings.Join(columns, ", ") + ") VALUES (" + strings.Join(placeholders, ", ") + ")" +
+		" ON CONFLICT (" + strings.Join(conflict, ", ") + ")"
+
+	var sets []string
+	for _, name := range names {
+		column, ok := findColumn(t, name)
+		if !ok || column.PKOrder > 0 {
+			continue
+		}
+		sets = append(sets, quoteIdent(name)+" = ?")
+		arg, err := bindValue(fields[name])
+		if err != nil {
+			return storage.Row{}, err
+		}
+		args = append(args, arg)
+	}
+	if len(sets) == 0 {
+		query += " DO NOTHING"
+	} else {
+		query += " DO UPDATE SET " + strings.Join(sets, ", ")
+	}
+
+	if _, err := r.q.ExecContext(ctx, query, args...); err != nil {
+		return storage.Row{}, classify(err)
 	}
 	return r.Get(ctx, t.Name, key)
 }

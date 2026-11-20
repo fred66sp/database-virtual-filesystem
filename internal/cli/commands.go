@@ -31,6 +31,9 @@ var (
 	flagMode    = flagSpec{"mode", "ro|rw", flagString, "access mode; rw requires an explicit write policy (default ro)"}
 	flagLimit   = flagSpec{"limit", "N", flagString, "maximum records per page, 1-1000"}
 	flagCursor  = flagSpec{"cursor", "TOKEN", flagString, "pagination cursor from meta.next_cursor"}
+	flagFields  = flagSpec{"fields", "COL,...", flagString, "comma-separated columns to emit; primary-key columns are always included"}
+	flagOrder   = flagSpec{"order", "COL[:asc|desc],...", flagString, "order rows by catalog columns, first key first (default asc); NULLs sort last"}
+	flagCount   = flagSpec{"count", "", flagBool, "return only the number of matching rows; --limit, --cursor and --fields do not apply"}
 	flagDepth   = flagSpec{"depth", "N", flagString, "tree depth, 1-4"}
 	flagWhere   = flagSpec{"where", "EXPR", flagRepeat, "filter COLUMN=OPVALUE (ops = != < <= > >= is-null not-null), repeatable (AND)"}
 	flagData    = flagSpec{"data", "JSON|-", flagString, "JSON payload, or - to read stdin once"}
@@ -139,8 +142,9 @@ var commands = []commandSpec{
 	{
 		name:    "cat",
 		summary: "read a row or a field as JSON",
-		usage:   "cat PATH",
+		usage:   "cat PATH [--fields COL,...]",
 		roles:   []argRole{argPath},
+		flags:   []flagSpec{flagFields},
 		wp:      "WP-02",
 	},
 	{
@@ -161,17 +165,17 @@ var commands = []commandSpec{
 	{
 		name:    "find",
 		summary: "filter rows with --where expressions",
-		usage:   "find PATH [--where EXPR]... [--limit N] [--cursor TOKEN]",
+		usage:   "find PATH [--where EXPR]... [--order COL[:asc|desc],...] [--fields COL,...] [--count] [--limit N] [--cursor TOKEN]",
 		roles:   []argRole{argPath},
-		flags:   []flagSpec{flagWhere, flagLimit, flagCursor},
+		flags:   []flagSpec{flagWhere, flagOrder, flagFields, flagCount, flagLimit, flagCursor},
 		wp:      "WP-03",
 	},
 	{
 		name:    "grep",
 		summary: "search a literal substring in text columns",
-		usage:   "grep PATH TEXT [--limit N] [--cursor TOKEN]",
+		usage:   "grep PATH TEXT [--count] [--limit N] [--cursor TOKEN]",
 		roles:   []argRole{argPath, argPlain},
-		flags:   []flagSpec{flagLimit, flagCursor},
+		flags:   []flagSpec{flagCount, flagLimit, flagCursor},
 		wp:      "WP-03",
 	},
 	{
@@ -191,6 +195,15 @@ var commands = []commandSpec{
 		flags:         []flagSpec{flagData, flagIfMatch, flagDryRun},
 		requiredFlags: []string{"data", "if-match"},
 		wp:            "WP-04",
+	},
+	{
+		name:          "upsert",
+		summary:       "create or update one row by its primary key, reporting which branch ran",
+		usage:         "upsert TABLE --data JSON|- [--if-match ETAG] [--dry-run]",
+		roles:         []argRole{argPath},
+		flags:         []flagSpec{flagData, flagIfMatch, flagDryRun},
+		requiredFlags: []string{"data"},
+		wp:            "REF-04",
 	},
 	{
 		name:          "cp",

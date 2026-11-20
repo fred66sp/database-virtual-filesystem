@@ -84,10 +84,13 @@ type Filter struct {
 	Value      Value
 }
 
-// OrderSpec is one ordering key.
+// OrderSpec is one ordering key. NullsLast places NULL after every non-NULL
+// value in both directions; DefaultOrder leaves it off so today's output is
+// unchanged, and only --order turns it on (REF-02).
 type OrderSpec struct {
-	Column string
-	Desc   bool
+	Column    string
+	Desc      bool
+	NullsLast bool `json:"NullsLast,omitempty"`
 }
 
 // DefaultOrder is explicit and total: the primary key for addressable tables,
@@ -124,10 +127,11 @@ type Query struct {
 	Search     *Search
 }
 
-// Mutation describes a single write. Kind is one of touch, write, cp, mv or rm.
-// cp and mv carry the source in Key and the destination key in Destination; rm
-// uses Key alone. IfMatch is the mandatory ETag precondition for write, cp, mv
-// and rm.
+// Mutation describes a single write. Kind is one of touch, write, upsert, cp,
+// mv or rm. cp and mv carry the source in Key and the destination key in
+// Destination; rm uses Key alone; upsert uses the primary-key parts of Key as
+// its conflict destination and Fields as the partial record. IfMatch is the
+// mandatory ETag precondition for write, upsert (update branch), cp, mv and rm.
 type Mutation struct {
 	Kind, Table, IfMatch string
 	Key, Destination     Key
@@ -139,6 +143,10 @@ type Reader interface {
 	Catalog(ctx context.Context) ([]Table, error)
 	Get(ctx context.Context, table string, key Key) (Row, error)
 	List(ctx context.Context, q Query) ([]Row, string, error)
+	// Count returns the size of the set a List with the same Filters and
+	// Search would return. Order, Limit, Cursor and Projection are ignored: a
+	// count is the whole filtered set, never a page (REF-03).
+	Count(ctx context.Context, q Query) (int64, error)
 }
 
 // Tx is a Reader that can also apply mutations.

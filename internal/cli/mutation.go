@@ -44,6 +44,9 @@ func executeMutation(inv *invocation, stdin io.Reader) (result, error) {
 	case "write":
 		data, err := svc.Write(ctx, *inv.path, payload, inv.ifMatch, opts)
 		return result{data: data}, err
+	case "upsert":
+		data, err := svc.Upsert(ctx, *inv.path, payload, inv.ifMatch, opts)
+		return result{data: data}, err
 	case "cp", "mv":
 		var data any
 		if inv.spec.name == "cp" {

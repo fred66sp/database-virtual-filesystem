@@ -49,6 +49,9 @@ type invocation struct {
 	depth   int
 	cursor  string
 	where   []string
+	fields  []string
+	order   string
+	count   bool
 	data    string
 	ifMatch string
 	format  string
@@ -156,6 +159,8 @@ func (inv *invocation) setBool(name string) {
 		inv.dryRun = true
 	case "apply":
 		inv.apply = true
+	case "count":
+		inv.count = true
 	}
 }
 
@@ -204,6 +209,13 @@ func (inv *invocation) setValue(name, value string) error {
 			return usageError("--where requires a non-empty expression")
 		}
 		inv.where = append(inv.where, expr)
+	case "fields":
+		inv.fields = strings.Split(value, ",")
+	case "order":
+		if strings.TrimSpace(value) == "" {
+			return usageError("--order requires a non-empty list")
+		}
+		inv.order = value
 	case "data":
 		inv.data = value
 	case "if-match":
@@ -234,6 +246,11 @@ func (inv *invocation) validate(pos []string, seen map[string]bool) error {
 	}
 	if inv.dryRun && inv.apply {
 		return usageError("--dry-run and --apply are mutually exclusive")
+	}
+	// A count is the whole filtered set; counting one page is meaningless.
+	// --fields is silently ignored under --count: a count has no row shape.
+	if inv.count && inv.cursor != "" {
+		return usageError("--count and --cursor are mutually exclusive")
 	}
 	for _, name := range spec.requiredFlags {
 		if !seen[name] {

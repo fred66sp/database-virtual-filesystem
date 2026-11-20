@@ -1,1 +1,1 @@
-{"version":1,"ok":false,"error":{"code":"E_USAGE","message":"usage: db-ai cat PATH"}}
+{"version":1,"ok":false,"error":{"code":"E_USAGE","message":"usage: db-ai cat PATH [--fields COL,...]"}}
