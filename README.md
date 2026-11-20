@@ -49,6 +49,25 @@ todo; divide el trabajo en dos invocaciones.
 El trabajo se gestiona en el tablero tasks-ai del repositorio (`.tasks-ai/`); su
 catálogo vivo, con `tasks-ai tags`.
 
+## Explorar las bases
+
+`db-ai serve` sirve el Visual Explorer: un servidor HTTP local de solo lectura
+que reutiliza el mismo núcleo que la CLI (catálogo, consultas y políticas) y no
+ejecuta mutaciones. Escucha en localhost y se cierra con Ctrl+C; la interfaz
+recorre montajes, tablas y filas con árbol lateral, vista tabular ordenable y
+paginada, inspector de registro y búsqueda, sin conocer el esquema de antemano.
+El diseño está en [DESIGN §15](docs/DESIGN.md).
+
+```bash
+db-ai serve               # http://127.0.0.1:8080
+db-ai serve --port 8099 --open
+```
+
+Para dejarlo en segundo plano está [`serve-explorer.sh`](serve-explorer.sh), con
+el mismo patrón que `serve-web.sh`: `./serve-explorer.sh` lo arranca en
+`http://127.0.0.1:8893`, y `./serve-explorer.sh status` y `./serve-explorer.sh
+stop` lo gestionan. Es una herramienta local de operación, no un despliegue.
+
 ## Compilar y probar
 
 ```bash

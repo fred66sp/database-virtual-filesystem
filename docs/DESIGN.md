@@ -67,11 +67,14 @@ db-ai mv ROW DEST_ROW --if-match ETAG --apply
 db-ai rm ROW --if-match ETAG --apply
 db-ai batch --data JSON|-
 db-ai export PATH [--where EXPR]... [--format json|jsonl] [--limit N] [--cursor TOKEN]
+db-ai serve [--port N] [--open]
 ```
 
 Flags globales `--json`, `--session`, `--timeout`, `--actor`; `--dry-run` para mutaciones, incompatible con `--apply`. `describe`, `find`, `grep`, `touch` y `export` reciben una ruta VFS (`/alias/table`), no un nombre de tabla. `--apply` es obligatorio solo en `mv` y `rm`. `--json` se acepta sin efecto: JSON es el formato por defecto y único del MVP. `-` lee stdin una sola vez. JSON malformado o claves duplicadas se rechazan. `--apply` es confirmación no interactiva de las operaciones destructivas, no permiso. La raíz es `/`; sin sesión, las rutas relativas se rechazan; `ls` sin argumento lista raíz o cwd de sesión. Flags desconocidos producen error. `--help` no abre bases. La forma preferida del filtro de ejemplo del PRD es `--where 'status=pending'`; los espacios exteriores del valor no son significativos. `version` es un subcomando, no un flag global: no abre bases y emite en `data` `{version, commit, state}` —versión funcional, revisión Git inyectada al compilar con `-ldflags -X` (`unknown` si no se inyectó) y estado de build `dev` o `release`.
 
 `--fields` recibe una lista separada por comas de columnas de la tabla y proyecta solo la presentación: la fila se lee completa para el ETag y la PK se emite siempre. `--order` recibe `columna[:asc|desc]` separados por comas, `asc` por defecto. `--count` sustituye la página por el recuento de filas que cumplen los filtros. `upsert` crea o actualiza por la clave primaria de destino.
+
+`serve` atiende HTTP en primer plano hasta Ctrl+C y es el único subcomando que no emite un sobre §10 por stdout; su diseño está en §15.
 
 ## 4. Identidad y rutas (FR-02–04, NFR-02,07)
 
@@ -276,4 +279,18 @@ Los siete ADR aprobados por el PO el 2026-11-19. El registro canónico es el reg
 - ETag frente a columnas de versión invasivas.
 - Rechazo conservador de efectos indirectos.
 
-Riesgos: semántica relacional no equivalente a archivos, esquemas exóticos, colaciones, concurrencia, auditoría no atómica y permisos del SO. Las firmas Go son propuestas; el driver SQLite se valida en WP-01 contra el motor embebido del driver, no contra el CLI (PRD §10). No se ha inspeccionado ninguna base real ni ejecutado código de implementación.
+Riesgos: semántica relacional no equivalente a archivos, esquemas exóticos, colaciones, concurrencia, auditoría no atómica y permisos del SO. Las firmas Go son propuestas; el driver SQLite se valida en WP-01 contra el motor embebido del driver, no contra el CLI (PRD §10). Ambas advertencias quedaron superadas después: el driver se validó contra bases reales en WP-01 y la épica tk-51 entregó y validó el Visual Explorer (§15) con inspección real de tres bases (ACM, tareas de otro proyecto y un grafo de código de esquema distinto).
+
+## 15. Visual Explorer local (`serve`)
+
+Origen: épica tk-51 del tablero del repositorio y decisión del PO de ofrecer un explorador de solo lectura sobre el mismo núcleo. No añade requisitos al PRD ni amplía la superficie de mutación; la implementación vive en `internal/web` y el paquete no referencia ningún handler de mutación, de modo que la garantía de solo lectura es estructural y no una comprobación en ejecución.
+
+El servidor escucha solo en `127.0.0.1`, sin opción de bind alternativo. `--port` acepta un puerto explícito (8080 por defecto); el arranque anuncia en stderr la URL y el número de montajes, `--open` abre el navegador de forma best-effort y Ctrl+C o SIGTERM cierran con código 0 dando hasta 5 s a las peticiones en vuelo. Un fallo de bind es error del comando.
+
+Superficie HTTP: una ruta `GET` por operación de lectura —`/api/ls`, `/api/tree`, `/api/stat`, `/api/describe`, `/api/find`, `/api/count`, `/api/cat` y `/api/grep`—, un 404 para cualquier otro camino bajo `/api/` y la página embebida en `/`. Al existir solo handlers `GET`, un `POST` a una ruta de API no puede alcanzar una mutación. Los parámetros replican el contrato: `path` se decodifica con el códec de rutas (§4), y `limit`, `depth`, `where`, `order`, `fields` y `cursor` se validan como sus flags homónimos, con los mismos límites y los mismos errores `E_*`; un montaje no registrado responde `E_NOT_FOUND` y una tabla sin identidad navegable, `E_UNSUPPORTED` (D-12).
+
+Un único `app.Service` comparte catálogo, consultas y políticas con la CLI: es un valor inmutable —rutas y plazo— cuyos handlers abren y cierran el almacén por llamada, así que no hay estado mutable por petición. La respuesta reutiliza el sobre y la tabla de código de error a estado HTTP de §10: el render lo inyecta el CLI, de modo que las formas de éxito y error tienen una sola definición.
+
+Los recursos estáticos (`index.html`, `app.js`, `styles.css` y Vue) viajan en el binario con `embed.FS`. La interfaz es una SPA sin paso de compilación, escrita con la Options API de Vue 3, y se guía por el catálogo que devuelve el servidor: árbol de montajes y tablas, vista tabular con ordenación y paginación por cursor, columnas visibles, inspector de registro, búsqueda literal, barra de estado y copia de valores y rutas. Cabeceras mínimas: `X-Content-Type-Options: nosniff` en todas las respuestas y `Cache-Control: no-store` bajo `/api/`.
+
+Operación: `serve-explorer.sh`, en la raíz, sigue el patrón de `serve-web.sh`. Arranca en segundo plano el binario instalado con el puerto fijo 8893 —la documentación web usa 8891 y el tablero 8890— y guarda pid y registro en `.run/serve-explorer.pid` y `.run/serve-explorer.log`; acepta `start`, `status` y `stop`. El arranque es idempotente, reconoce el servidor por el puerto en el que escucha y no toca un proceso ajeno que ocupe ese puerto.
