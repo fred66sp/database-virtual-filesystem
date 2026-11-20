@@ -47,6 +47,8 @@ Commands:
       apply several mutations in one transaction
   export PATH [--where EXPR]... [--format json|jsonl] [--limit N] [--cursor TOKEN]
       export rows to stdout as JSON or JSONL
+  serve [--port N] [--open]
+      serve the read-only local explorer over HTTP
 
 Global flags:
   --json           accepted for compatibility; JSON is the only output format

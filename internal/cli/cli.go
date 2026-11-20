@@ -6,10 +6,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"dbvfs/internal/app"
 	"dbvfs/internal/state"
+	"dbvfs/internal/web"
 )
 
 // Run handles exactly one invocation: parse, dispatch and render. It is the
@@ -30,6 +34,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		// envelope to the same stdout; unreachable on real stdout (SIGPIPE
 		// kills the process first), tolerated for the io.Writer abstraction.
 		if err := writeHelp(stdout, inv.spec); err != nil {
+			return fail(stdout, stderr, err)
+		}
+		return 0
+	}
+	// serve lives in the foreground: its output is the HTTP API, so it never
+	// goes through the single-shot result envelope and stdout stays empty.
+	if inv.spec.name == "serve" {
+		if err := executeServe(inv, stderr); err != nil {
 			return fail(stdout, stderr, err)
 		}
 		return 0
@@ -83,6 +95,77 @@ func execute(inv *invocation, stdin io.Reader) (result, error) {
 		return executeRead(inv)
 	}
 	return result{}, codedError(CodeUnsupported, "%s is not implemented until %s", inv.spec.name, inv.spec.wp)
+}
+
+// serveFunc runs the foreground explorer. It is a variable so CLI tests can
+// replace it and never bind a port.
+var serveFunc = func(ctx context.Context, opts web.Options) error {
+	return web.Serve(ctx, opts)
+}
+
+// executeServe wires the shared service and runs the server in the foreground.
+// Signals are installed here because main is a thin forwarder; a clean
+// Ctrl+C/SIGTERM exit is 0, as the approved serve contract requires.
+func executeServe(inv *invocation, stderr io.Writer) error {
+	svc, err := newService(inv)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return serveFunc(ctx, web.Options{
+		Port:    inv.port,
+		Service: svc,
+		Respond: serveResponse,
+		Open:    inv.open,
+		Stderr:  stderr,
+	})
+}
+
+// serveResponse adapts the §10 envelope to HTTP: the CLI keeps the only
+// definition of both shapes and of the code→status mapping.
+func serveResponse(w http.ResponseWriter, data any, truncated bool, nextCursor string, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+	id, err := requestID("")
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+	if err := writeJSON(w, successEnvelope(data, meta{Truncated: truncated, NextCursor: nextCursor, RequestID: id})); err != nil {
+		// writeJSON only returns before writing on an output-limit failure, so
+		// the standard E_LIMIT envelope can still set the status.
+		writeErrorResponse(w, err)
+	}
+}
+
+func writeErrorResponse(w http.ResponseWriter, err error) {
+	coded := CodedError(err)
+	w.WriteHeader(httpStatus(coded.Code))
+	_ = writeJSON(w, errorEnvelope(coded))
+}
+
+// httpStatus is the single table from a DESIGN §10 code to its HTTP status;
+// the frontend paints the code, the status only groups it.
+func httpStatus(c Code) int {
+	switch c {
+	case CodeUsage, CodeUnsupported, CodeLimit, CodeStaleSession:
+		return http.StatusBadRequest
+	case CodeNotFound:
+		return http.StatusNotFound
+	case CodeDenied:
+		return http.StatusForbidden
+	case CodeConflict, CodeConstraint:
+		return http.StatusConflict
+	case CodeBusy:
+		return http.StatusServiceUnavailable
+	case CodeTimeout:
+		return http.StatusGatewayTimeout
+	}
+	return http.StatusInternalServerError
 }
 
 // newService wires the config directory, the sessions and audit directories and
