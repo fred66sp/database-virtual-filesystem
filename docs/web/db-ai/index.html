@@ -97,9 +97,9 @@
           <tbody>
             <tr><td>Hay que saber qué bases y tablas existen.</td><td><code>mounts</code>, <code>ls</code> y <code>tree</code> descubren; <code>describe</code> y <code>stat</code> confirman columnas, claves, tipos y capacidades.</td></tr>
             <tr><td>Hay que leer una fila o un campo concreto.</td><td><code>cat</code> sobre la ruta, sin traer la tabla completa ni inventar columnas.</td></tr>
-            <tr><td>Hay que filtrar o buscar texto.</td><td><code>find</code> con operadores acotados y <code>grep</code> como subcadena literal, con límites, orden determinista y cursores.</td></tr>
+            <tr><td>Hay que filtrar o buscar texto.</td><td><code>find</code> con operadores acotados, <code>--order</code> para elegir el criterio y <code>--count</code> cuando solo hace falta el número; <code>grep</code> como subcadena literal, con límites, orden determinista y cursores.</td></tr>
             <tr><td>Hay que sacar muchas filas.</td><td><code>export</code> a JSON o JSONL por stdout, con los mismos filtros y límites que <code>find</code>.</td></tr>
-            <tr><td>Hay que insertar, actualizar, copiar, renombrar o borrar.</td><td><code>touch</code>, <code>write</code>, <code>cp</code>, <code>mv</code> y <code>rm</code>, con modo <code>rw</code>, política explícita, dry-run y ETag según la operación.</td></tr>
+            <tr><td>Hay que insertar, actualizar, copiar, renombrar o borrar.</td><td><code>touch</code>, <code>upsert</code>, <code>write</code>, <code>cp</code>, <code>mv</code> y <code>rm</code>, con modo <code>rw</code>, política explícita, dry-run y ETag según la operación.</td></tr>
             <tr><td>Hay que aplicar varias mutaciones juntas.</td><td><code>batch</code> de hasta 100 operaciones sobre un solo montaje y una sola transacción, con rollback completo ante fallo.</td></tr>
           </tbody>
         </table>
@@ -135,8 +135,8 @@
 
       <div class="flow">
         <div class="flow-step"><code>paso 1</code><strong>Descubrir</strong><p><code>mounts</code> dice qué alias y modo hay; <code>ls</code> y <code>tree</code> acotan la estructura; <code>describe</code> y <code>stat</code> resuelven tabla, columnas y ruta.</p></div>
-        <div class="flow-step"><code>paso 2</code><strong>Leer</strong><p><code>cat</code> para una fila o un campo; <code>find</code> con <code>--where</code>; <code>grep</code> para texto literal; <code>export</code> solo si hace falta volumen.</p></div>
-        <div class="flow-step"><code>paso 3</code><strong>Escribir</strong><p>Montaje <code>rw</code> y política explícita. Dry-run primero; <code>--if-match</code> con el ETag vigente; <code>--apply</code> solo en <code>mv</code> y <code>rm</code>.</p></div>
+        <div class="flow-step"><code>paso 2</code><strong>Leer</strong><p><code>cat</code> para una fila o un campo; <code>find</code> con <code>--where</code>, <code>--fields</code>, <code>--order</code> o <code>--count</code> según lo que falte; <code>grep</code> para texto literal; <code>export</code> solo si hace falta volumen.</p></div>
+        <div class="flow-step"><code>paso 3</code><strong>Escribir</strong><p>Montaje <code>rw</code> y política explícita. <code>upsert</code> crea o actualiza por la clave primaria; dry-run primero; <code>--if-match</code> con el ETag vigente; <code>--apply</code> solo en <code>mv</code> y <code>rm</code>.</p></div>
         <div class="flow-step"><code>paso 4</code><strong>Verificar</strong><p>Releer la fila, comprobar el ETag nuevo y reconciliar <code>E_COMMIT_UNKNOWN</code> leyendo la base, nunca reintentando a ciegas.</p></div>
       </div>
 
@@ -149,6 +149,8 @@ db-ai find /work/tasks --where 'status=pending' --limit 20</code></pre></div>
 
       <p>El montaje es <code>ro</code> por defecto y no crea el fichero si falta. Los ejemplos son la intención normativa del contrato funcional; la sintaxis completa y las flags viven en <a href="../../DESIGN.md">DESIGN.md</a> §3.</p>
 
+      <p><code>--fields</code>, <code>--order</code> y <code>--count</code> no cambian qué filas entran, sino qué se devuelve de ellas. En <code>find</code> y en el <code>cat</code> de una fila, <code>--fields</code> recorta la presentación a las columnas pedidas más la clave; la fila se lee completa por dentro y el ETag no cambia. <code>--order</code> acepta <code>columna:asc|desc</code>, ascendente por defecto y con desempate por el resto de la clave. <code>--count</code> responde solo con el número de filas y no admite cursor.</p>
+
       <h3>Escribir con precondición</h3>
       <div class="code"><pre><code class="language-bash">ETAG=$(db-ai cat /work/tasks/TK-001 | sed -n 's/.*"etag":"\([^"]*\)".*/\1/p')
 
@@ -156,7 +158,9 @@ db-ai write /work/tasks/TK-001 \
   --data '{"status":{"kind":"text","data":"done"}}' \
   --if-match "$ETAG"</code></pre></div>
 
-      <p>El ETag se lee de la fila, no se inventa. <code>write</code> actualiza campos autorizados y no cambia la clave primaria ni las columnas generadas. Un registro recibe un mapa parcial, no un reemplazo implícito.</p>
+      <p>El ETag se lee de la fila, no se inventa: es la firma de su contenido, así que si algo cambió desde que la leíste, la firma ya no encaja y la escritura se detiene con <code>E_CONFLICT</code>. <code>write</code> actualiza campos autorizados y no cambia la clave primaria ni las columnas generadas. Un registro recibe un mapa parcial, no un reemplazo implícito.</p>
+
+      <p><code>upsert</code> cubre el otro caso: crear una fila o actualizarla por su clave primaria con el mismo comando. Sin <code>--if-match</code> crea; actualizar exige el ETag leído y, sin él, devuelve <code>E_USAGE</code>. La rama se decide dentro de la transacción y la respuesta distingue <code>created</code> de <code>updated</code>; <code>--dry-run</code> anticipa cuál sería sin escribir.</p>
 
       <h3>Agrupar en un lote</h3>
       <div class="code"><pre><code class="language-bash">db-ai batch --data '[{"op":"write","path":"/work/tasks/TK-001/status","if_match":"sha256:&lt;ETag de cat&gt;","data":{"kind":"text","data":"done"}}]'</code></pre></div>
@@ -180,8 +184,8 @@ db-ai write /work/tasks/TK-001 \
           <tbody>
             <tr><td>Contrato JSON único</td><td>Un objeto por invocación en <code>stdout</code>, incluso ante error; logs y diagnósticos a <code>stderr</code>. <code>--json</code> se acepta sin efecto porque JSON es el formato por defecto y único del MVP.</td></tr>
             <tr><td>ETag</td><td>SHA-256 de la representación canónica de tabla, clave, <code>schema_version</code> y valores tipados. Representa contenido, no una versión monotónica: no detecta ABA y obliga a releer tras cada cambio.</td></tr>
-            <tr><td>Deny-by-default</td><td>El montaje <code>ro</code> es el defecto; <code>rw</code> exige política explícita. La política se compara por segmentos de ruta, nunca por prefijos de cadena.</td></tr>
-            <tr><td>Transacción</td><td>Las mutaciones verifican catálogo, permisos, existencia y ETag dentro de <code>BEGIN IMMEDIATE</code>; se emite éxito solo después del commit.</td></tr>
+            <tr><td>Deny-by-default</td><td>El montaje <code>ro</code> es el defecto y <code>rw</code> no concede nada por sí solo: sin una regla que lo permita, la operación no pasa. La política se compara por segmentos de ruta, nunca por prefijos de cadena.</td></tr>
+            <tr><td>Transacción</td><td>Las mutaciones abren la transacción en modo de escritura (<code>BEGIN IMMEDIATE</code>) y verifican dentro catálogo, permisos, existencia y ETag, de modo que nadie se cuela entre la comprobación y el cambio; el éxito se emite después del commit.</td></tr>
             <tr><td>Auditoría</td><td>JSONL local fuera de la base de usuario: <code>request_id</code>, actor declarado, operación, recurso redactado, estado y código. No guarda valores, SQL crudo ni credenciales.</td></tr>
             <tr><td>Límites</td><td>1000 registros por página (<code>--limit</code> mayor devuelve <code>E_LIMIT</code>), 16 MiB de salida, profundidad de <code>tree</code> 4 y <code>--timeout</code> entre 1 y 60 s con defecto 5 s.</td></tr>
           </tbody>
@@ -294,14 +298,14 @@ go vet ./...</code></pre></div>
       </div>
 
       <div class="note">
-        <p>Esta página resume los contratos v0.2.0 de <a href="../../PRD.md">PRD.md</a> y <a href="../../DESIGN.md">DESIGN.md</a>. Si una afirmación de aquí contradice a esos documentos, mandan ellos.</p>
+        <p>Esta página resume los contratos v0.4.0 de <a href="../../PRD.md">PRD.md</a> y <a href="../../DESIGN.md">DESIGN.md</a>: si una afirmación de aquí contradice a esos documentos, mandan ellos.</p>
       </div>
     </section>
   </main>
 </div>
 
 <footer class="footer">
-  <span><code>docs/web/db-ai/</code> · db-ai v0.2.0 · documento en español</span>
+  <span><code>docs/web/db-ai/</code> · db-ai v0.4.0 · documento en español</span>
   <span><a href="../index.html">Índice</a> · <a href="#top">Volver arriba</a> · <a href="../../PRD.md">PRD</a> · <a href="../../DESIGN.md">DESIGN</a> · <a href="flujo-de-trabajo.html">Flujo</a> · <a href="arquitectura.html">Arquitectura</a></span>
   <span>Página estática: no envía datos ni carga recursos externos · <code>docs/web/db-ai/index.html</code></span>
 </footer>

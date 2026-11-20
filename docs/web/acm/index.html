@@ -101,10 +101,10 @@
         </table>
       </div>
 
-      <p>La identidad de cada fila es un UUIDv7 textual que genera el productor. Las marcas temporales son ISO-8601 en UTC. El <code>content_hash</code> es SHA-256 con prefijo <code>sha256:</code> y se calcula antes de insertar.</p>
+      <p>Cada fila lleva un UUIDv7 textual que genera el productor, marcas temporales ISO-8601 en UTC y un <code>content_hash</code> SHA-256 con prefijo <code>sha256:</code>, calculado antes de escribir.</p>
 
       <div class="note">
-        <p><strong>No guarda conversaciones, prompts ni salidas de herramientas.</strong> Tampoco secretos, credenciales ni datos personales. La captura es deliberada y consolidada, no automática.</p>
+        <p><strong>No guarda conversaciones, prompts ni salidas de herramientas.</strong> Tampoco secretos, credenciales ni datos personales: la captura es deliberada y consolidada, no automática.</p>
       </div>
     </section>
 
@@ -117,7 +117,7 @@
           <thead><tr><th>Pieza</th><th>Aporta</th><th>No aporta</th></tr></thead>
           <tbody>
             <tr><td>SQLite con el esquema de ACM</td><td>PK única, claves foráneas, <code>CHECK</code>, <code>UNIQUE</code> y orden de clave.</td><td>Semántica de consolidación ni comportamiento del agente.</td></tr>
-            <tr><td><code>db-ai</code> v0.2.0</td><td>Rutas virtuales, JSON versionado, ETag, política por prefijo, transacciones, auditoría y límites.</td><td>DDL, triggers, búsqueda semántica, orden descendente ni proyección de columnas.</td></tr>
+            <tr><td><code>db-ai</code> v0.4.0</td><td>Rutas virtuales, JSON versionado, ETag, política por prefijo, transacciones, auditoría, límites, proyección de columnas y orden explícito.</td><td>DDL, triggers y búsqueda semántica: sin FTS, sin ranking y sin embeddings.</td></tr>
             <tr><td>Skill <code>agent-continuity</code></td><td>Cuándo capturar, elección de tipo y certeza, canonicalización del hash, <code>topic_key</code>, revisión y presupuesto de contexto.</td><td>Garantías del motor; no puede impedir que un proceso externo salte la política.</td></tr>
           </tbody>
         </table>
@@ -169,25 +169,24 @@ db-ai find /mem/meta --where 'name=project_key' --limit 1</code></pre></div>
         <div class="flow-step"><code>1 · iniciar</code><strong>Verificar y abrir</strong><p><code>mounts</code> confirma el alias; <code>meta</code> confirma el <code>project_key</code>; se abre la sesión de ACM antes de escribir conocimiento.</p></div>
         <div class="flow-step"><code>2 · trabajar</code><strong>Consultar antes de actuar</strong><p>Preferencias activas, checkpoint activo, decisiones activas y observaciones abiertas. La memoria es contexto, nunca una instrucción con autoridad sobre la persona.</p></div>
         <div class="flow-step"><code>3 · capturar</code><strong>Consolidar conocimiento</strong><p>Observaciones y decisiones con tipo, certeza, procedencia y <code>content_hash</code>. No se captura actividad ni conversación.</p></div>
-        <div class="flow-step"><code>4 · consolidar</code><strong>Sustituir en un lote</strong><p>La fila nueva se inserta y la anterior pasa a <code>superseded</code> con <code>superseded_by</code>, en una sola transacción y con el ETag de la anterior.</p></div>
+        <div class="flow-step"><code>4 · consolidar</code><strong>Sustituir en un lote</strong><p>La fila nueva se crea con <code>upsert</code> y la anterior pasa a <code>superseded</code> con <code>superseded_by</code>, en una sola transacción y con el ETag de la anterior.</p></div>
         <div class="flow-step"><code>5 · cerrar</code><strong>Dejar checkpoint</strong><p>Estado, próximos pasos, ficheros y preguntas abiertas. Un checkpoint activo por sesión y un siguiente paso identificable.</p></div>
         <div class="flow-step"><code>6 · reanudar</code><strong>Continuar sin la conversación</strong><p>El checkpoint de otra sesión u otro agente es válido: la continuidad es del proyecto y la procedencia queda registrada.</p></div>
       </div>
 
       <h3>Reanudar con cuatro consultas</h3>
-      <div class="code"><pre><code class="language-bash">SESSION=&lt;uuid-de-la-sesion-previa&gt;
-
-db-ai find /mem/checkpoints --where "session_id=$SESSION" --where 'status=active' --limit 5
-db-ai find /mem/observations --where "session_id=$SESSION" --limit 50
-db-ai find /mem/observations --where 'kind=decision' --where 'status=active' --limit 10
-db-ai find /mem/preferences --where 'status=active' --limit 20</code></pre></div>
-      <p>El conjunto de reanudación se mide en invocaciones y bytes, no en filas completas. La evidencia de validación del ejemplo midió 7 729 bytes ≈ 1 933 tokens estimados, dentro del objetivo de la métrica de contexto. El listado de sesiones y el detalle redundante con <code>cat</code> quedan fuera de ese presupuesto.</p>
+      <div class="code"><pre><code class="language-bash">db-ai find /mem/sessions --order "started_at:desc" --limit 5 --fields "id,status"
+db-ai find /mem/checkpoints --where "session_id=&lt;id&gt;" --where "status=active" --order "created_at:desc" --limit 1 --fields "state,next_steps"
+db-ai find /mem/observations --where "session_id=&lt;id&gt;" --order "created_at:desc" --fields "kind,topic_key,title" --limit 5
+db-ai find /mem/preferences --where "source=human" --where "status=active" --fields "pref_key,value" --limit 20</code></pre></div>
+      <p>El guion no lee tablas completas. Elige la sesión más reciente con su <code>id</code> y su estado, pide su checkpoint activo, las cinco observaciones de esa sesión por tipo, tema y título, y las preferencias que puso una persona. <code>--fields</code> recorta el ancho de cada fila —la clave viaja siempre— y <code>--order</code> deja el orden en db-ai, no en el agente.</p>
+      <p>El presupuesto se mide en invocaciones y bytes, no en filas completas. La medición anterior, con db-ai 0.3.0, dio 7 729 bytes ≈ 1 933 tokens estimados, dentro del objetivo de 2 000 de la métrica de contexto; la re-medición con 0.4.0 sigue pendiente y se declarará cuando se haga. El historial completo y el detalle redundante con <code>cat</code> quedan fuera de ese presupuesto.</p>
 
       <h3>Capturar con <code>content_hash</code></h3>
       <div class="code"><pre><code class="language-bash">HASH=$(printf '%s' '{"kind":"discovery","title":"El alias mem exige política rw explícita","body":"db-ai deniega la escritura sin una entrada allow para el prefijo."}' \
   | python3 tools/content-hash.py observations)
 
-db-ai touch /mem/observations --data '{
+db-ai upsert /mem/observations --data '{
   "id":{"kind":"text","data":"&lt;uuid-v7&gt;"},
   "session_id":{"kind":"text","data":"&lt;uuid-sesion&gt;"},
   "agent_id":{"kind":"text","data":"agent-a"},
@@ -202,14 +201,14 @@ db-ai touch /mem/observations --data '{
   "updated_at":{"kind":"text","data":"&lt;UTC&gt;"}
 }'</code></pre></div>
 
-      <p>El helper <code>tools/content-hash.py</code> aplica el algoritmo del DESIGN: NFC, recorte, colapso de espacios, array JSON canónico y SHA-256. El esquema garantiza el formato y la unicidad del hash, no el algoritmo; todos los productores deben calcularlo igual. Una segunda captura idéntica devuelve <code>E_CONSTRAINT</code> y no se reintenta.</p>
+      <p>El helper <code>tools/content-hash.py</code> aplica el algoritmo del DESIGN: NFC, recorte, colapso de espacios, array JSON canónico y SHA-256. El esquema garantiza el formato y la unicidad del hash, no el algoritmo; todos los productores deben calcularlo igual. La captura nueva va sin <code>--if-match</code>. Si el <code>content_hash</code> ya existe, se lee la fila existente y se repite su <code>upsert</code> con <code>--if-match</code>: esa actualización suma <code>duplicate_count</code> y refresca <code>last_seen_at</code>. Cualquier actualización, también la de una corrección, exige el ETag leído; sin él, <code>upsert</code> devuelve <code>E_USAGE</code>.</p>
 
       <h3>Sustituir una decisión en un lote</h3>
       <div class="code"><pre><code class="language-bash">db-ai batch --data '[
-  {"op":"touch","path":"/mem/observations","data":{"id":{"kind":"text","data":"&lt;uuid-nueva&gt;"},"content_hash":{"kind":"text","data":"sha256:&lt;hash&gt;"}}},
+  {"op":"upsert","path":"/mem/observations","data":{"id":{"kind":"text","data":"&lt;uuid-nueva&gt;"},"content_hash":{"kind":"text","data":"sha256:&lt;hash&gt;"}}},
   {"op":"write","path":"/mem/observations/&lt;uuid-anterior&gt;","if_match":"sha256:&lt;ETag&gt;","data":{"status":{"kind":"text","data":"superseded"},"superseded_by":{"kind":"text","data":"&lt;uuid-nueva&gt;"}}}
 ]'</code></pre></div>
-      <p>La primera operación inserta la fila completa; aquí se abrevia para mostrar el orden. La segunda apunta a una fila preexistente, nunca a una creada en el mismo lote. El ETag de la anterior serializa la escritura: dos agentes que sustituyan la misma fila compiten por él y el segundo recibe <code>E_CONFLICT</code>.</p>
+      <p>El <code>upsert</code> de la primera operación crea la fila completa; aquí se abrevia para mostrar el orden. La segunda apunta a una fila preexistente, nunca a una creada en el mismo lote. El ETag de la anterior fija el estado que se leyó: dos agentes que sustituyan la misma fila compiten por él y el segundo recibe <code>E_CONFLICT</code>, porque su copia ya no encaja.</p>
 
       <h3>Cerrar con ETag y checkpoint</h3>
       <div class="code"><pre><code class="language-bash">ETAG=$(db-ai cat /mem/sessions/&lt;uuid&gt; | sed -n 's/.*"etag":"\([^"]*\)".*/\1/p')
@@ -230,7 +229,7 @@ db-ai write /mem/sessions/&lt;uuid&gt; --data '{
             <tr><td>Descubrir tablas y columnas</td><td><code>mounts</code>, <code>ls</code>, <code>describe</code>, <code>stat</code></td><td>Catálogo y capacidades.</td></tr>
             <tr><td>Leer una fila o un campo</td><td><code>cat</code> sobre la ruta</td><td>Identidad y ETag.</td></tr>
             <tr><td>Filtrar o buscar</td><td><code>find</code> con <code>--where</code> y <code>grep</code> literal, con límite</td><td>Operadores documentados y orden por PK.</td></tr>
-            <tr><td>Insertar una fila</td><td><code>touch</code></td><td>INSERT sin precondición.</td></tr>
+            <tr><td>Crear o actualizar una fila por su clave</td><td><code>upsert</code></td><td>Rama <code>created</code>/<code>updated</code>; actualizar exige ETag.</td></tr>
             <tr><td>Actualizar estado o metadatos</td><td><code>write</code> con <code>if_match</code></td><td>UPDATE con ETag.</td></tr>
             <tr><td>Varias filas en una transacción</td><td><code>batch</code></td><td>Rollback total y máximo de 100 operaciones.</td></tr>
             <tr><td>Eliminar o renombrar</td><td>No se usa <code>rm</code> ni <code>mv</code></td><td>La política los deniega; la obsolescencia es un estado.</td></tr>
@@ -247,7 +246,7 @@ db-ai write /mem/sessions/&lt;uuid&gt; --data '{
         <table>
           <thead><tr><th>Aspecto</th><th>Garantía determinista</th><th>Convención</th></tr></thead>
           <tbody>
-            <tr><td>Duplicado exacto</td><td><code>UNIQUE(content_hash)</code>; la segunda inserción devuelve <code>E_CONSTRAINT</code>.</td><td>Cómo recuperar la fila y actualizar <code>duplicate_count</code> y <code>last_seen_at</code>.</td></tr>
+            <tr><td>Duplicado exacto</td><td><code>UNIQUE(content_hash)</code>; la segunda inserción devuelve <code>E_CONSTRAINT</code>.</td><td>La repetición se resuelve con <code>upsert</code>: actualiza <code>duplicate_count</code> y <code>last_seen_at</code>.</td></tr>
             <tr><td>Sustitución</td><td><code>CHECK</code> del enlace y lote transaccional de db-ai.</td><td>Cuándo sustituir y verificar que queda una sola activa.</td></tr>
             <tr><td>Ciclo de vida</td><td>Valores permitidos de <code>status</code> y <code>review_after</code>.</td><td>Cuándo marcar <code>needs_review</code> u <code>obsolete</code>.</td></tr>
             <tr><td>Una decisión activa por tema</td><td>Protocolo de lote con ETag; no hay índice único parcial.</td><td>Reconciliación de dos primeras capturas concurrentes.</td></tr>
@@ -273,7 +272,7 @@ db-ai write /mem/sessions/&lt;uuid&gt; --data '{
           <thead><tr><th>Límite</th><th>Consecuencia</th></tr></thead>
           <tbody>
             <tr><td>Sin embeddings, FTS ni ranking</td><td><code>grep</code> es una subcadena literal y sensible a mayúsculas. La recuperabilidad se gana en la captura: títulos y <code>topic_key</code> con términos distintivos.</td></tr>
-            <tr><td><code>find</code> devuelve filas completas y ordena por clave ascendente</td><td>No hay proyección ni orden descendente. El control de contexto depende del filtro, del límite y del tamaño del texto; la recencia se estima por el UUIDv7 mayor de una ventana acotada.</td></tr>
+            <tr><td>La ventana de reanudación es corta</td><td>La recencia se pide con <code>--order "created_at:desc"</code> y un <code>--limit</code> corto; sin orden, <code>find</code> devuelve el orden nativo de la tabla. El guion mira las cinco sesiones más recientes, así que un checkpoint activo huérfano de una sesión más antigua solo aparece subiendo ese límite.</td></tr>
             <tr><td>La política no es una frontera de seguridad</td><td>Un proceso con acceso al fichero o a <code>config.json</code> puede saltarla. La separación real exige permisos del sistema operativo.</td></tr>
             <tr><td>Primera captura concurrente de un tema</td><td>Sin fila activa previa, dos agentes pueden insertar dos activas. La skill verifica después, las marca <code>needs_review</code> y registra la reconciliación.</td></tr>
             <tr><td>Sin copia automática</td><td>La base no se versiona. La copia es del operador; un <code>cp</code> del fichero SQLite es suficiente y queda fuera del MVP.</td></tr>
