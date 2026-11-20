@@ -33,7 +33,7 @@ La separación entre garantías y convenciones es explícita:
 | Capa | Aporta | No aporta |
 |---|---|---|
 | SQLite (esquema de ACM) | PK única, FK, `CHECK`, `UNIQUE`, orden de clave | semántica de consolidación |
-| db-ai v0.2.0 | rutas virtuales, JSON versionado, ETag, política por prefijo, transacciones, auditoría, límites | DDL, triggers, búsqueda semántica, orden descendente, proyección de columnas |
+| db-ai v0.2.0 | rutas virtuales, JSON versionado, ETag, política por prefijo, transacciones, auditoría, límites | DDL, triggers, búsqueda semántica, proyección de columnas, ordenación y recuento (llegan con db-ai 0.4.0) |
 | skill agent-continuity | cuándo capturar, elección de tipo y certeza, canonicalización del hash, `topic_key`, revisión, presupuesto de contexto | garantías del motor; no puede impedir que un proceso externo salte la política |
 
 **Regla de composición:** ACM usa db-ai tal como está documentado. No modifica `cmd/db-ai/` ni `internal/`; no crea comandos, flags ni operaciones nuevas. Una carencia de db-ai se documenta en §14 como propuesta independiente, nunca como ampliación del alcance de ACM.
@@ -422,7 +422,7 @@ No se usa la sesión `--session` de db-ai para la memoria: esa sesión solo mant
 
 ### 8.6 Reanudar
 
-1. Acotar la búsqueda del checkpoint antes de pedirla: `find` ordena por PK ascendente y no garantiza el más reciente en la primera página (C-ACM-03). Con `session_id` conocido (handoff o reanudación de una sesión concreta), `find` de checkpoints por `session_id` y `status = 'active'`, con límite corto; el UUIDv7 mayor de esa página es el vigente. Sin sesión conocida, `find` de sesiones por `started_at` dentro de una ventana acotada (por defecto, los últimos 14 días) y límite corto; si la respuesta trae `truncated`, acortar el intervalo y repetir, sin recorrer páginas; con la ventana en memoria, ordenar localmente por UUIDv7 mayor y tomar la primera sesión con checkpoint activo.
+1. Acotar la búsqueda del checkpoint antes de pedirla. Con `session_id` conocido (handoff o reanudación de una sesión concreta), `find` de checkpoints por `session_id` y `status = 'active'`, con límite corto; el checkpoint vigente es el primero con `--order "created_at:desc"` (nulos al final). Sin sesión conocida, `find` de sesiones con `--order "started_at:desc"` y límite corto; se toma la primera sesión con checkpoint activo. No hay ventanas temporales ni ordenación local: el orden lo aplica db-ai.
 2. `find` del checkpoint activo de esa sesión.
 3. `find` de decisiones activas solo del `topic_key` de la tarea en curso, con límite 5. Sin `topic_key` conocido, página mínima (límite 3) y declarar el recorte de `truncated`.
 4. `find` de preferencias por `pref_key` aplicable, límite 2 por clave y como máximo tres claves; sin claves conocidas, página mínima (límite 3).
@@ -486,7 +486,7 @@ Una fila `superseded` exige `superseded_by`; una `active` lo prohíbe. Una fila 
 | Pregunta | Consulta | Límite |
 |---|---|---|
 | ¿Qué sesiones están abiertas? | `find` en `sessions` por `agent_id` y `status` | 20 |
-| ¿Cuál es la última? | elegir el UUIDv7 mayor de la ventana acotada de sesiones | no aplica |
+| ¿Cuál es la última? | `find` de sesiones con `--order "started_at:desc"` y límite corto | no aplica |
 | ¿Dónde quedamos? | `find` en `checkpoints` por `session_id` y `status = 'active'`; sin sesión conocida, la sesión más reciente de la ventana por `started_at` | 5 |
 | ¿Qué decidimos sobre T? | `find` en `observations` por `kind = 'decision'`, `topic_key` y `status` | 10 |
 | ¿Qué sabemos de un término? | `grep` en `observations` con término distintivo | 20 |
@@ -494,7 +494,7 @@ Una fila `superseded` exige `superseded_by`; una `active` lo prohíbe. Una fila 
 | ¿Qué pasó en esta sesión? | `find` en `observations` por `session_id` | 50 |
 | ¿Qué hay en la base? | `describe` y `stat`; no `export` completo | no aplica |
 
-`find` devuelve filas completas y ordena por PK ascendente. Para la recencia se usa el UUIDv7 mayor de una ventana acotada de `started_at` —con corrección del corte si `truncated`—, no una ordenación descendente que db-ai no expone. El checkpoint se busca por `session_id`; solo sin sesión conocida se busca primero la sesión en la ventana. `grep` devuelve la ruta de la fila, la columna y la posición; después se lee el campo con `cat`.
+`find` acepta `--fields` (proyección en el render, ETag de fila completa intacto, la clave se emite siempre), `--order` con desempate determinista y `NULLS LAST`, y `--count`; la recencia se pide con la ordenación del servidor (`--order "started_at:desc"`, nulos al final), no con ventanas temporales ni ordenación local. El checkpoint se busca por `session_id`; solo sin sesión conocida se piden primero las sesiones ordenadas. `grep` devuelve la ruta de la fila, la columna y la posición; después se lee el campo con `cat`.
 
 El guion por defecto está acotado (protocolos de la skill, §1.4 y §3.6): decisiones solo del `topic_key` de la tarea en curso y preferencias solo por las `pref_key` aplicables. Con `session_id` conocido son cuatro `find`; en frío, la ventana de sesiones añade el quinto. La medición está en [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8.
 
@@ -625,7 +625,7 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** `--fields`, `--order`/`--sort` y `--count` (o un `stat` con recuento), manteniendo el orden determinista y los límites. Fuera de ACM.
 
-**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: es la propuesta de mayor rentabilidad —ahorro de contexto en `find` y recencia más barata— con riesgo bajo, pues respeta el orden determinista y los límites existentes. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20.
+**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: es la propuesta de mayor rentabilidad —ahorro de contexto en `find` y recencia más barata— con riesgo bajo, pues respeta el orden determinista y los límites existentes. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20. **Actualización (2026-11-20):** implementada y publicada en db-ai 0.4.0 como `find --order "col:asc|desc"` (desempate por PK, `NULLS LAST`, cursor ligado), `find`/`cat --fields` (proyección en render con el ETag intacto y la PK siempre emitida) y `--count` en `find` y `grep`.
 
 ### C-ACM-04 — Sin upsert ni inserción condicional
 
@@ -635,7 +635,7 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** una semántica de inserción condicional o de upsert por clave única, con resultado explícito de “creado” o “existente”. Fuera de ACM.
 
-**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: el ACM compensa hoy la idempotencia con `touch` + búsqueda por hash + `write` + verificación, determinista pero costoso; el resultado explícito de “creado” o “existente” simplifica el flujo sin ambigüedad. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20.
+**Estado (2026-11-20):** aceptada por el PO para una evolución futura de db-ai. Motivo: el ACM compensa hoy la idempotencia con `touch` + búsqueda por hash + `write` + verificación, determinista pero costoso; el resultado explícito de “creado” o “existente” simplifica el flujo sin ambigüedad. Implementación pendiente como trabajo nuevo después de cerrar la épica tk-20. **Actualización (2026-11-20):** implementada y publicada en db-ai 0.4.0 como `upsert TABLA --data '{...}' [--if-match ETAG] [--dry-run]`, con resultado `{"result":"created"|"updated","applied":bool,"path","etag"}`; actualizar sin `--if-match` es `E_USAGE` y un ETag obsoleto es `E_CONFLICT`.
 
 ### C-ACM-05 — Sin vistas ni búsqueda entre tablas
 
@@ -655,7 +655,7 @@ Estas carencias son propuestas de evolución independientes. Salvo la nota de es
 
 **Propuesta:** documentar en DESIGN de db-ai §9 el vocabulario completo de `ops`, incluida la comprobación por elemento del lote. Es una corrección documental, no una capacidad nueva.
 
-**Estado (2026-11-20):** aceptada por el PO. Motivo: es documentación pura, el coste es mínimo y hoy un operador puede escribir una política incompleta por no tener el vocabulario contractual. Implementación pendiente como corrección en DESIGN de db-ai después de cerrar la épica tk-20.
+**Estado (2026-11-20):** aceptada por el PO. Motivo: es documentación pura, el coste es mínimo y hoy un operador puede escribir una política incompleta por no tener el vocabulario contractual. Implementación pendiente como corrección en DESIGN de db-ai después de cerrar la épica tk-20. **Actualización (2026-11-20):** corrección documental aplicada en DESIGN de db-ai §9 con la versión 0.4.0.
 
 ### C-ACM-07 — Sin DDL ni creación de esquema
 
