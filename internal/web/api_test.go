@@ -485,7 +485,7 @@ func TestAPIHeadersAndStaticIndex(t *testing.T) {
 		t.Errorf("index Content-Type = %q, want text/html", got)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"db-ai Visual Explorer", "Explorador visual — llega en P4", "/api/ls?path=/"} {
+	for _, want := range []string{"db-ai Visual Explorer", "/app.js", "/vendor/vue.global.prod.js"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("index body does not contain %q", want)
 		}
