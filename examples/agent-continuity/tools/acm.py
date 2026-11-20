@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Adaptador ACM: cinco comandos agent-first sobre db-ai.
+"""Adaptador ACM: eventos AIF sobre db-ai.
 
 Contrato (una sola línea JSON compacta por invocación):
   éxito  {"ok":true,...}
   error  {"ok":false,"error":"<código db-ai>","message":"..."}
 
-Comandos:
-  start --session ID [--goal G]      abre sesión; restaura la abierta con ese ID
+Eventos AIF: el agente invoca el evento y recibe un formulario con solo lo que
+solo él sabe; lo devuelve relleno por `submit --data -` (stdin).
+  start [--goal G]                   resuelve directo: abre o restaura la sesión
+  decision | learning | discovery | bugfix | preference | recall | checkpoint |
+  close [--session ID]               sin datos, devuelve su formulario
+  submit [--data JSON|-] [--session ID]  ejecuta un formulario rellenado
+
+Comandos convencionales, ocultos en la ayuda y sin cambios de contrato:
   remember --session ID --kind K --title T --body B [...]
   search --session ID --query T [--limit N]
   checkpoint --session ID --state S --next-steps N [...]
@@ -34,19 +40,86 @@ SESSION_RE = re.compile(r"[A-Za-z0-9._-]{1,128}")
 KINDS = ("discovery", "decision", "pattern", "bugfix", "architecture", "learning")
 CONFIDENCES = ("confirmed", "inference", "hypothesis", "proposal", "unknown")
 EXIT_CODES = {
-    "E_USAGE": 2, "E_NOT_FOUND": 3, "E_STALE_SESSION": 3, "E_DENIED": 4,
-    "E_CONFLICT": 5, "E_CONSTRAINT": 6, "E_BUSY": 7, "E_TIMEOUT": 7,
-    "E_UNSUPPORTED": 8, "E_LIMIT": 8, "E_INTERNAL": 9, "E_COMMIT_UNKNOWN": 10,
+    "E_USAGE": 2, "E_VALIDATION": 2, "E_NOT_FOUND": 3, "E_STALE_SESSION": 3,
+    "E_DENIED": 4, "E_CONFLICT": 5, "E_CONSTRAINT": 6, "E_BUSY": 7,
+    "E_TIMEOUT": 7, "E_UNSUPPORTED": 8, "E_LIMIT": 8, "E_INTERNAL": 9,
+    "E_COMMIT_UNKNOWN": 10,
+}
+
+INSTRUCTION = (
+    "Completa el formulario conservando event, form_id y session; reemplaza "
+    "cada value por tu respuesta y devuelve TODO el JSON mediante: "
+    "acm submit --data - (por stdin).")
+CORRECTION = "corrige los campos indicados y reenvía"
+FORM_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+# What each AIF event must ask: only what the agent knows or decides. "start"
+# has no form (cmd_start resolves it), and every "allowed" is a closed set.
+EVENT_FORMS = {
+    "start": {},
+    "decision": {
+        "topic": {"required": True},
+        "title": {"required": True},
+        "decision": {"required": True},
+        "rationale": {"required": True},
+        "alternatives": {"required": False},
+        "consequences": {"required": False},
+        "confidence": {"required": False, "allowed": CONFIDENCES},
+    },
+    "learning": {
+        "title": {"required": True},
+        "body": {"required": True},
+        "topic": {"required": False},
+        "confidence": {"required": False, "allowed": CONFIDENCES},
+    },
+    "discovery": {
+        "title": {"required": True},
+        "body": {"required": True},
+        "topic": {"required": False},
+        "confidence": {"required": False, "allowed": CONFIDENCES},
+    },
+    "bugfix": {
+        "title": {"required": True},
+        "body": {"required": True},
+        "rationale": {"required": False},
+        "topic": {"required": False},
+        "confidence": {"required": False, "allowed": CONFIDENCES},
+    },
+    "preference": {
+        "pref_key": {"required": True},
+        "value": {"required": True},
+        # Never credit the user with an inferred preference.
+        "origin": {"required": True, "allowed": ("human", "agent"),
+                   "hint": "human SOLO si el usuario manifestó la preferencia "
+                           "expresamente; agent si la inferiste"},
+        "rationale": {"required": False},
+    },
+    "recall": {
+        "query": {"required": True,
+                  "hint": "todas las palabras deben aparecer en el recuerdo; "
+                          "usa palabras clave del dominio, no la pregunta completa"},
+        "limit": {"required": False},
+    },
+    "checkpoint": {
+        "state": {"required": True},
+        "next_steps": {"required": True},
+        "files": {"required": False},
+        "open_questions": {"required": False},
+    },
+    "close": {
+        "summary": {"required": True},
+    },
 }
 
 
 class AcmError(Exception):
     """Error de contrato: se serializa tal cual y nunca deja traza."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, payload: dict | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.payload = payload or {}
 
 
 # --- utilidades --------------------------------------------------------------
@@ -178,6 +251,212 @@ def consolidate(observation_id: str, row: dict, timestamp: str) -> dict:
             continue
         return {"result": "consolidated", "id": observation_id,
                 "duplicate_count": count}
+
+
+def set_preference(sid: str, pref_key: str, value: str, rationale: str,
+                   origin: str) -> dict:
+    """Una preferencia activa por clave; UNIQUE(content_hash) arbitra el duplicado."""
+    if origin not in ("human", "agent"):
+        raise AcmError("E_USAGE",
+                       "origin debe ser human (dicho por el usuario) o agent")
+    open_session(sid)
+    pref_key = require_text(pref_key, "pref_key")
+    value = require_text(value, "value")
+    rationale = (rationale or "").strip()
+    digest = content_hash("preferences", {"pref_key": pref_key, "value": value,
+                                          "rationale": rationale})
+    found = rows(f"/{ALIAS}/preferences", f"content_hash={digest}", limit=1)
+    if found:
+        return {"ok": True, "result": "existing",
+                "id": fields(found[0])["id"],
+                "status": fields(found[0])["status"],
+                "content_hash": digest}
+
+    timestamp = now()
+    preference_id = uuid7(dt.datetime.now(dt.timezone.utc))
+    operations = [{"op": "touch", "path": f"/{ALIAS}/preferences", "data": {
+        "id": preference_id, "session_id": sid, "agent_id": AGENT_ID,
+        # An "origin" already uses the vocabulary of "source": human or agent.
+        "source": origin, "pref_key": pref_key, "value": value,
+        "rationale": rationale or None, "status": "active",
+        "superseded_by": None, "content_hash": digest,
+        "created_at": timestamp, "updated_at": timestamp}}]
+    active = rows(f"/{ALIAS}/preferences", f"pref_key={pref_key}",
+                  "status=active", order="created_at:desc", limit=1)
+    if active:
+        operations.append({
+            "op": "write",
+            "path": f"/{ALIAS}/preferences/{fields(active[0])['id']}",
+            "if_match": active[0]["etag"],
+            "data": {"status": "superseded", "superseded_by": preference_id,
+                     "updated_at": timestamp}})
+    try:
+        db_ai("batch", "--data", json.dumps(operations, ensure_ascii=False))
+    except AcmError as exc:
+        if exc.code != "E_CONSTRAINT":
+            raise
+        # Another writer won the same hash: it is the same content, not a retry.
+        found = rows(f"/{ALIAS}/preferences", f"content_hash={digest}", limit=1)
+        if not found:
+            raise
+        return {"ok": True, "result": "existing",
+                "id": fields(found[0])["id"], "content_hash": digest}
+    return {"ok": True, "result": "created", "id": preference_id,
+            "superseded": len(operations) - 1, "content_hash": digest}
+
+
+# --- AIF: formularios ---------------------------------------------------------
+
+def build_form(event: str, sid: str, form_id: str,
+               submitted: dict | None) -> tuple[dict, dict]:
+    """Formulario del evento y, si hay datos, los problemas de validación.
+
+    submitted=None emite el formulario en blanco: no es una validación.
+    """
+    form = {"event": event, "form_id": form_id, "session": sid}
+    invalid = {}
+    for name, rule in EVENT_FORMS[event].items():
+        raw = None if submitted is None else submitted.get(name)
+        # The instruction says to replace each "value": echoing the form back
+        # with the nested {"required":..,"value":..} objects must also work.
+        if isinstance(raw, dict) and "value" in raw:
+            raw = raw["value"]
+        if name == "limit" and isinstance(raw, int) and not isinstance(raw, bool):
+            raw = str(raw)
+        text = raw.strip() if isinstance(raw, str) else ""
+        if submitted is not None:
+            if raw is not None and not isinstance(raw, str):
+                invalid[name] = "debe ser texto"
+            elif rule["required"] and not text:
+                invalid[name] = "obligatorio"
+            elif text and "allowed" in rule and text not in rule["allowed"]:
+                invalid[name] = ("valores permitidos: "
+                                 + ", ".join(rule["allowed"]))
+        field = {"required": rule["required"], "value": text}
+        if "allowed" in rule:
+            field["allowed"] = list(rule["allowed"])
+        if "hint" in rule:
+            field["hint"] = rule["hint"]
+        form[name] = field
+    return form, invalid
+
+
+def forms_dir() -> Path:
+    """Marcadores de reenvío junto a la base: /meta es de solo lectura."""
+    for mount in db_ai("mounts")["mounts"]:
+        if mount["alias"] == ALIAS:
+            return Path(mount["file"]).parent / "acm-forms"
+    raise AcmError("E_INTERNAL", f"el montaje '{ALIAS}' no está en db-ai mounts")
+
+
+def submitted_id(form_id: str) -> str | None:
+    try:
+        return (forms_dir() / form_id).read_text(encoding="utf-8").strip() or None
+    except FileNotFoundError:
+        return None
+
+
+def mark_submitted(form_id: str, record: str) -> None:
+    """Reclama el form_id; quien pierda no re-captura, ya hay un id registrado.
+
+    Accepted race: two concurrent resends can both capture once; the loser
+    consolidates on content_hash, so the row is unique either way.
+    shortcut: one marker file per form and no pruning; each is a few bytes.
+    """
+    directory = forms_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        with (directory / form_id).open("x", encoding="utf-8") as handle:
+            handle.write(record)
+    except FileExistsError:
+        pass
+
+
+def reject(invalid: dict, form: dict | None = None) -> AcmError:
+    payload = {"invalid": invalid}
+    if form is not None:
+        payload["form"] = form
+    payload["instruction"] = CORRECTION
+    return AcmError("E_VALIDATION", "el formulario tiene campos inválidos",
+                    payload)
+
+
+def submit_event(event: str, sid: str, values: dict) -> dict:
+    """Despacha al comando ya validado: la persistencia no se duplica."""
+    if event == "preference":
+        return set_preference(sid, values["pref_key"], values["value"],
+                              values["rationale"], values["origin"])
+    if event == "recall":
+        limit = int(values["limit"]) if values["limit"] else 10
+        return cmd_search(argparse.Namespace(session=sid,
+                                             query=values["query"],
+                                             limit=limit))
+    if event == "checkpoint":
+        return cmd_checkpoint(argparse.Namespace(
+            session=sid, state=values["state"],
+            next_steps=values["next_steps"], files=values["files"],
+            open_questions=values["open_questions"]))
+    if event == "close":
+        return cmd_close(argparse.Namespace(
+            session=sid, summary=values["summary"], state=None,
+            next_steps=None, files=None, open_questions=None))
+    return cmd_remember(argparse.Namespace(
+        session=sid, kind=event, title=values["title"],
+        body=values["decision"] if event == "decision" else values["body"],
+        rationale=values.get("rationale", ""),
+        alternatives=values.get("alternatives", ""),
+        consequences=values.get("consequences", ""),
+        topic_key=values.get("topic", ""),
+        confidence=values.get("confidence") or None))
+
+
+def cmd_event(args: argparse.Namespace) -> dict:
+    """Evento sin datos: entrega el formulario que el agente debe rellenar."""
+    sid = session_id(args)
+    form, _ = build_form(args.command, sid,
+                         uuid7(dt.datetime.now(dt.timezone.utc)), None)
+    return {"ok": True, "result": "form", "form": form,
+            "instruction": INSTRUCTION}
+
+
+def cmd_submit(args: argparse.Namespace) -> dict:
+    sid = session_id(args)
+    raw = sys.stdin.read() if args.data == "-" else args.data
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise reject({"data": f"JSON inválido: {exc.msg}"}) from exc
+    if not isinstance(data, dict):
+        raise reject({"data": "se esperaba un objeto JSON"})
+    event = data.get("event")
+    if event == "start":
+        raise reject({"event": "start se resuelve con 'acm start', no con submit"})
+    if event not in EVENT_FORMS:
+        valid = ", ".join(name for name in EVENT_FORMS if name != "start")
+        raise reject({"event": f"evento desconocido; válidos: {valid}"})
+    # form_id names the idempotency marker file, so it is constrained here.
+    form_id = data.get("form_id")
+    if not (isinstance(form_id, str) and FORM_ID_RE.fullmatch(form_id)):
+        form_id = uuid7(dt.datetime.now(dt.timezone.utc))
+    form, invalid = build_form(event, sid, form_id, data)
+    if data.get("session") != sid:
+        invalid["session"] = f"debe coincidir con la sesión efectiva '{sid}'"
+    if event == "recall":
+        limit = form["limit"]["value"]
+        if limit and not (limit.isdigit() and 1 <= int(limit) <= 100):
+            invalid["limit"] = "entero entre 1 y 100"
+    if invalid:
+        raise reject(invalid, form)
+
+    previous = submitted_id(form_id)
+    if previous:
+        return {"ok": True, "result": "already_submitted", "id": previous}
+    values = {name: form[name]["value"] for name in EVENT_FORMS[event]}
+    result = submit_event(event, sid, values)
+    record = result.get("id") or result.get("checkpoint")
+    if record:
+        mark_submitted(form_id, record)
+    return result
 
 
 # --- comandos ----------------------------------------------------------------
@@ -332,6 +611,20 @@ def cmd_close(args: argparse.Namespace) -> dict:
             "checkpoint": checkpoint_id, "ended_at": timestamp}
 
 
+def cmd_checkpoint_or_form(args: argparse.Namespace) -> dict:
+    """Sin datos convencionales es el evento AIF; con ellos, el comando de siempre."""
+    if any((args.state, args.next_steps, args.files, args.open_questions)):
+        return cmd_checkpoint(args)
+    return cmd_event(args)
+
+
+def cmd_close_or_form(args: argparse.Namespace) -> dict:
+    if any((args.summary, args.state, args.next_steps, args.files,
+            args.open_questions)):
+        return cmd_close(args)
+    return cmd_event(args)
+
+
 def cmd_search(args: argparse.Namespace) -> dict:
     sid = session_id(args)
     load_session(sid)
@@ -362,11 +655,14 @@ def cmd_search(args: argparse.Namespace) -> dict:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Adaptador ACM sobre db-ai (5 comandos, JSON compacto).")
-    sub = parser.add_subparsers(dest="command", required=True)
+        description="Adaptador ACM sobre db-ai (eventos AIF, JSON compacto).")
+    sub = parser.add_subparsers(dest="command", required=True,
+                                 metavar="COMANDO")
 
-    def add(name: str, handler, help_text: str):
-        cmd = sub.add_parser(name, help=help_text)
+    def add(name: str, handler, help_text: str | None):
+        # No help means absent from the help table: conventional commands stay.
+        cmd = (sub.add_parser(name) if help_text is None
+               else sub.add_parser(name, help=help_text))
         cmd.add_argument("--session", help="identificador de sesión explícito")
         cmd.set_defaults(handler=handler)
         return cmd
@@ -374,7 +670,29 @@ def build_parser() -> argparse.ArgumentParser:
     start = add("start", cmd_start, "abre o restaura una sesión")
     start.add_argument("--goal", help="objetivo de la sesión")
 
-    remember = add("remember", cmd_remember, "captura una observación")
+    for name in EVENT_FORMS:
+        if name not in ("start", "checkpoint", "close"):
+            add(name, cmd_event, "evento AIF: devuelve su formulario")
+
+    submit = add("submit", cmd_submit, "ejecuta un formulario AIF rellenado")
+    submit.add_argument("--data", default="-",
+                        help="JSON del formulario; '-' lo lee de stdin")
+
+    checkpoint = add("checkpoint", cmd_checkpoint_or_form,
+                     "evento AIF: checkpoint de reanudación")
+    checkpoint.add_argument("--state")
+    checkpoint.add_argument("--next-steps", dest="next_steps")
+    checkpoint.add_argument("--files")
+    checkpoint.add_argument("--open-questions", dest="open_questions")
+
+    close = add("close", cmd_close_or_form, "evento AIF: cierra la sesión")
+    close.add_argument("--summary")
+    close.add_argument("--state")
+    close.add_argument("--next-steps", dest="next_steps")
+    close.add_argument("--files")
+    close.add_argument("--open-questions", dest="open_questions")
+
+    remember = add("remember", cmd_remember, None)
     remember.add_argument("--kind", help=f"uno de: {', '.join(KINDS)}")
     remember.add_argument("--title")
     remember.add_argument("--body")
@@ -384,22 +702,9 @@ def build_parser() -> argparse.ArgumentParser:
     remember.add_argument("--topic-key", dest="topic_key")
     remember.add_argument("--confidence", help="por defecto confirmed")
 
-    search = add("search", cmd_search, "busca conocimiento persistido")
+    search = add("search", cmd_search, None)
     search.add_argument("--query")
     search.add_argument("--limit", type=int, default=10)
-
-    checkpoint = add("checkpoint", cmd_checkpoint, "guarda un checkpoint")
-    checkpoint.add_argument("--state")
-    checkpoint.add_argument("--next-steps", dest="next_steps")
-    checkpoint.add_argument("--files")
-    checkpoint.add_argument("--open-questions", dest="open_questions")
-
-    close = add("close", cmd_close, "cierra sesión con checkpoint final")
-    close.add_argument("--summary")
-    close.add_argument("--state")
-    close.add_argument("--next-steps", dest="next_steps")
-    close.add_argument("--files")
-    close.add_argument("--open-questions", dest="open_questions")
     return parser
 
 
@@ -409,7 +714,7 @@ def main(argv: list[str] | None = None) -> int:
         result = args.handler(args)
     except AcmError as exc:
         print(json.dumps({"ok": False, "error": exc.code,
-                          "message": exc.message},
+                          "message": exc.message, **exc.payload},
                          ensure_ascii=False, separators=(",", ":")))
         return EXIT_CODES.get(exc.code, 1)
     print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
