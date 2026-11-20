@@ -110,9 +110,9 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | M-ACM-02 Latencia de recuperación p95 | percentil 95 del tiempo de pared por invocación de lectura en la reanudación, con fixture de 10 000 observaciones en disco local | 100 repeticiones; reloj del arnés; hardware declarado en el informe | evidence-benchmark.md §8 | p95 8,08 ms por invocación del guion acotado; 7,51 ms en las operaciones nuevas (n=800) | p95 ≤ 150 ms | ACM-05 | p95 > 500 ms |
 | M-ACM-03 Contexto consumido por reanudación | bytes de stdout acumulados por las invocaciones de M-ACM-01, convertidos a tokens con un factor de conversión declarado en el informe | el arnés suma stdout; excluye stderr; declara la aproximación | evidence-benchmark.md §2 y §8 | 1 444 tokens con `session_id` conocido (SUPERADO); 9 058 en frío y 19 660 con el guion completo anterior (FALLIDO) | ≤ 2 000 tokens | ACM-05 | > 6 000 tokens |
 | M-ACM-04 Coste de captura consolidada | invocaciones de db-ai por observación o decisión consolidada, sin contar la recuperación de un duplicado exacto, incluida la verificación posterior | el arnés cuenta invocaciones del escenario de captura | evidence-benchmark.md §4 | 2 invocaciones por captura, con verificación posterior (10/10) | ≤ 3 | ACM-05 | > 6 |
-| M-ACM-05 Reanudación correcta | proporción de cinco preguntas de reanudación respondidas correctamente usando solo la memoria, sin conversación ni Git | evaluador humano con guion; contrasta respuestas con el estado del repositorio | evidence-agents.md | 5 de 5 por evaluador delegado; ratificación humana pendiente | 5 de 5 | ACM-05 | < 4 de 5 |
+| M-ACM-05 Reanudación correcta | proporción de cinco preguntas de reanudación respondidas correctamente usando solo la memoria, sin conversación ni Git | evaluador humano con guion; contrasta respuestas con el estado del repositorio | evidence-agents.md | 5 de 5 por evaluador delegado; ratificada por el PO el 2026-11-20 | 5 de 5 | ACM-05 | < 4 de 5 |
 
-**M-ACM-03 depende del guion y se declara sin suavizarlo:** el guion acotado por `topic_key` y `pref_key` con `session_id` conocido cumple (1 444 tokens ≤ 2 000); el mismo guion en frío, sin sesión conocida, falla (9 058 tokens) porque la ventana de sesiones devuelve filas completas y no hay proyección (C-ACM-03). El objetivo permanece en 2 000 tokens. **M-ACM-05** se midió con dos agentes reales y un evaluador delegado: 5 de 5; el PRD pide evaluador humano, así que la ratificación del PO queda pendiente.
+**M-ACM-03 depende del guion y se declara sin suavizarlo:** el guion acotado por `topic_key` y `pref_key` con `session_id` conocido cumple (1 444 tokens ≤ 2 000); el mismo guion en frío, sin sesión conocida, falla (9 058 tokens) porque la ventana de sesiones devuelve filas completas y no hay proyección (C-ACM-03). El objetivo permanece en 2 000 tokens. **M-ACM-05** se midió con dos agentes reales y un evaluador delegado: 5 de 5; ratificada como evaluación humana por el PO el 2026-11-20.
 
 ## 8. Alcance de esta versión
 
@@ -411,7 +411,7 @@ Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio 
 | Una PK textual sin `NOT NULL` deja la tabla no navegable | hecho | `describe` observado sobre base temporal | DESIGN de ACM §4.1 y §15 | observado en el entorno de trabajo |
 | Engram usa sesiones, observaciones, `topic_key`, revisión y conflictos | hecho | documentación de Engram | GitHub `docs/ARCHITECTURE.md` | inspiración conceptual; no se clona ni se atribuye la misma implementación |
 | El problema de continuidad existe para agentes en este repositorio | inferencia | `AGENTS.md`, tablero y modelo de trabajo | §4 | sin entrevistas ni analítica; no se mide su magnitud |
-| La memoria acotada reduce el contexto de reanudación | hecho medido | benchmark con 10 240 observaciones y prueba con dos agentes | [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8; [evidence-agents.md](../scenarios/evidence/evidence-agents.md) | con `session_id` conocido cumple 1 444 tokens; en frío falla (9 058) por C-ACM-03; M-ACM-05 sin ratificación humana |
+| La memoria acotada reduce el contexto de reanudación | hecho medido | benchmark con 10 240 observaciones y prueba con dos agentes | [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8; [evidence-agents.md](../scenarios/evidence/evidence-agents.md) | con `session_id` conocido cumple 1 444 tokens; en frío falla (9 058) por C-ACM-03; M-ACM-05 ratificada por el PO el 2026-11-20 |
 | La skill `agent-continuity` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh`, `skill/` y `scenarios/evidence/` | la implementación vive en el árbol; su disponibilidad en el binario instalado depende de la release |
 | Una base por proyecto, UUIDv7 y skill en `examples/` | decisión aprobada | PO, encargo tk-18 | §16 | no consta en un documento versionado aparte del tablero |
 | db-ai v0.2.0 es la primera release | decisión aprobada | PO, encargo tk-18 | §16 | sujeta a la versión desplegada |
@@ -420,7 +420,7 @@ Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio 
 ### Límites de la verificación
 
 - ACM está implementado en el árbol: `init.sh`, el esquema y la skill `skill/` existen y se ejecutaron. Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin la skill.
-- M-ACM-01 a M-ACM-04 están medidas sobre un fixture determinista de 10 240 observaciones y M-ACM-05 con dos agentes reales; falta la ratificación humana de M-ACM-05 que el propio objetivo exige. Veredictos en §7 y §17.
+- M-ACM-01 a M-ACM-04 están medidas sobre un fixture determinista de 10 240 observaciones y M-ACM-05 con dos agentes reales, ratificada como evaluación humana por el PO el 2026-11-20. Veredictos en §7 y §17.
 - No se hicieron entrevistas ni observación de usuarios; las personas se sostienen en artefactos del repositorio.
 - `db-ai version` existe en el árbol y devuelve `{version, commit, state}`, pero el binario instalado puede no exponerlo hasta la release y, sin `ldflags`, `commit` es `unknown` (DESIGN de db-ai §3; DESIGN §14 C-ACM-01).
 - El rendimiento y el consumo de contexto se midieron con 10 000 observaciones y hardware declarado; no son una prueba de producción ni de otros volúmenes, y el conteo de tokens usa la aproximación declarada bytes/4.
@@ -434,7 +434,7 @@ Documento entregado: PRD completo; líneas base medidas y veredictos de M-ACM-01
 Fuentes inventariadas: §1.1
 Afirmaciones críticas y trazabilidad: §17
 Contradicciones y UNKNOWN: sin UNKNOWN vivos en las métricas; la magnitud del problema de continuidad no se midió con entrevistas
-Decisiones pendientes: ratificación humana de M-ACM-05 (PO); preguntas abiertas de §14 sobre la revisión de la cola `needs_review` (tk-25); propuestas de evolución C-ACM-01 a C-ACM-08 de DESIGN §14 (tk-22)
+Decisiones pendientes: preguntas abiertas de §14 sobre la revisión de la cola `needs_review` (tk-25). Resueltas el 2026-11-20: ratificación humana de M-ACM-05 (PO) y las propuestas de evolución C-ACM-01 a C-ACM-08 de DESIGN §14 (tk-22)
 Validaciones necesarias: producto, diseño, ingeniería, QA y usuarios (§15); M-ACM-05 exige evaluador humano
-Veredicto de la puerta de calidad: PASA A REVISIÓN; no se declara cerrada hasta la ratificación humana de M-ACM-05
+Veredicto de la puerta de calidad: PASA A REVISIÓN; la ratificación humana de M-ACM-05 se registró el 2026-11-20 (PO)
 ```
