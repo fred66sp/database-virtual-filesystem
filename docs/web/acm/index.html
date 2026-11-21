@@ -86,7 +86,7 @@
       <div class="section-head"><span class="section-num">1</span><h2 class="title">Qué es</h2></div>
       <p class="sub">Una memoria persistente de continuidad para agentes que trabajan en un proyecto. No es un registro de actividad ni una conversación guardada: es conocimiento consolidado y estado de reanudación.</p>
 
-      <p>ACM vive en <code>.agent-memory/memory.db</code>, una base SQLite por proyecto que el proyecto anfitrión excluye de Git. El operador la monta como <code>mem</code> y el adaptador la consulta con las rutas y comandos de <code>db-ai</code>. Una sesión posterior recupera el checkpoint activo, las decisiones vigentes y las preferencias aplicables sin leer la conversación anterior.</p>
+      <p>ACM vive en <code>.agent-memory/memory.db</code>, una base SQLite por proyecto que, por defecto, el proyecto anfitrión excluye de Git, aunque puede decidir versionarla. El operador la monta como <code>mem</code> y el adaptador la consulta con las rutas y comandos de <code>db-ai</code>. Una sesión posterior recupera el checkpoint activo, las decisiones vigentes y las preferencias aplicables sin leer la conversación anterior.</p>
 
       <div class="table-wrap wrap-cells">
         <table>
@@ -140,7 +140,7 @@
 ACM_HOME=/ruta/del/proyecto ACM_ALIAS=mem-b bash init.sh</code></pre></div>
 
       <div class="flow">
-        <div class="flow-step"><code>paso 1</code><strong>Crear</strong><p><code>.agent-memory/</code> y <code>memory.db</code> si faltan. El proyecto anfitrión excluye el directorio en su <code>.gitignore</code>.</p></div>
+        <div class="flow-step"><code>paso 1</code><strong>Crear</strong><p><code>.agent-memory/</code> y <code>memory.db</code> si faltan. Por defecto, el proyecto anfitrión excluye el directorio en su <code>.gitignore</code>; puede decidir versionar solo la base.</p></div>
         <div class="flow-step"><code>paso 2</code><strong>Esquema</strong><p>Aplica <code>schema.sql</code> solo si la base no existe o le faltan tablas, con <code>PRAGMA foreign_keys = ON</code>.</p></div>
         <div class="flow-step"><code>paso 3</code><strong>Seed</strong><p>Aplica <code>seed.sql</code> solo si la base no tiene datos; genera el <code>project_key</code> de la base.</p></div>
         <div class="flow-step"><code>paso 4</code><strong>Montaje</strong><p>Registra el alias <code>mem</code> y su política en <code>config.json</code> con una mezcla atómica que conserva otros alias.</p></div>
@@ -264,7 +264,7 @@ $ acm close --summary "Parser de fechas migrado a UTC" --next-steps "Revisar con
             <tr><td>La ventana de reanudación es corta</td><td><code>acm start</code> devuelve la última sesión cerrada con su checkpoint y las cinco entradas más recientes de cada bloque. Un checkpoint activo huérfano de una sesión anterior solo aparece rebuscando con <code>acm recall</code> o con <code>db-ai</code>.</td></tr>
             <tr><td>La política no es una frontera de seguridad</td><td>Un proceso con acceso al fichero o a <code>config.json</code> puede saltarla. La separación real exige permisos del sistema operativo.</td></tr>
             <tr><td>Primera captura concurrente de un tema</td><td>Sin fila activa previa, dos agentes pueden insertar dos activas. El flujo de revisión del proyecto lo verifica después, las marca <code>needs_review</code> y registra la reconciliación.</td></tr>
-            <tr><td>Sin copia automática</td><td>La base no se versiona. La copia es del operador; un <code>cp</code> del fichero SQLite es suficiente y queda fuera del MVP.</td></tr>
+            <tr><td>Sin copia automática</td><td>La copia es del operador; un <code>cp</code> del fichero SQLite es suficiente y queda fuera del MVP. Versionar la base es decisión del anfitrión.</td></tr>
             <tr><td>Sin DDL, triggers ni migraciones automáticas</td><td>El esquema se aplica fuera de db-ai. <code>schema_version</code> habilita migraciones manuales y revisadas.</td></tr>
             <tr><td>Sin <code>cp</code>, <code>mv</code> ni <code>rm</code> por política</td><td>La obsolescencia es un cambio de estado. La identidad UUID permanece estable como ruta.</td></tr>
           </tbody>

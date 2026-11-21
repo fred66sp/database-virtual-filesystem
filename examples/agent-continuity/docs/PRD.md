@@ -117,7 +117,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 
 ### 8.1 In scope
 
-- Una base SQLite por proyecto en `.agent-memory/memory.db`, excluida por `.gitignore` y montada como alias `mem`.
+- Una base SQLite por proyecto en `.agent-memory/memory.db`, montada como alias `mem`; por defecto excluida por `.gitignore`, con opción del anfitrión de versionar solo la base.
 - Esquema de memoria con `meta`, `sessions`, `observations` (incluidas las decisiones), `checkpoints` y `preferences`.
 - Convenciones del adaptador `acm` y del bloque de memoria de `AGENTS.md` (ACM-04): cuándo capturar, cómo consolidar, cómo recuperar y cómo reconciliar conflictos.
 - Ejemplo funcional y evidencias de validación (ACM-03 y ACM-05).
@@ -194,7 +194,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 
 - Dado un proyecto con memoria inicializada, cuando el operador monta la base como `mem`, entonces `mounts` muestra el alias, `ls /mem` lista las tablas de memoria y `describe /mem/observations` describe la tabla.
 - Dados dos proyectos A y B, cuando cada uno captura conocimiento, entonces cada base contiene solo sus filas y los valores `project_key` de `meta` difieren.
-- Dado el directorio de memoria, cuando se ejecuta `git check-ignore .agent-memory/`, entonces sale con código 0.
+- Dado un anfitrión con la política por defecto, cuando se ejecuta `git check-ignore .agent-memory/`, entonces sale con código 0. Dado un anfitrión que decide versionar la memoria, cuando se versiona, entonces solo `memory.db` queda versionado y `acm-forms/` y `*.db-wal`/`*.db-shm` siguen ignorados.
 
 **Trazabilidad:** E-ACM-01, O-ACM-01; personas operador y agente; DESIGN §3 y D-ACM-01.
 
@@ -318,7 +318,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 |---|---|---|---|
 | NFR-ACM-01 | Composición y minimalismo: sin motor de memoria, CLI, daemon, MCP, embeddings ni dependencia de proveedor LLM; SQLite, db-ai y adaptador AIF | demuestra la composición y evita deuda | revisión de dependencias y del diff; el núcleo de db-ai no cambia |
 | NFR-ACM-02 | Determinismo: orden y campos estables, identificadores UUIDv7, ETag y JSON versionado | un agente necesita resultados reproducibles y precondiciones fiables | repetición de consultas sobre fixture; pruebas de conflicto de ETag |
-| NFR-ACM-03 | Privacidad y minimización: sin conversaciones, prompts, salidas de herramientas ni secretos; directorio de memoria ignorado por Git | la memoria no debe convertirse en un registro bruto | inspección de fixture; `git check-ignore`; revisión de campos |
+| NFR-ACM-03 | Privacidad y minimización: sin conversaciones, prompts, salidas de herramientas ni secretos; directorio de memoria fuera de Git por defecto, con opción del anfitrión de versionar solo la base | la memoria no debe convertirse en un registro bruto | inspección de fixture; `git check-ignore`; revisión de campos |
 | NFR-ACM-04 | Rendimiento y contexto: se respetan M-ACM-01 a M-ACM-04; límites acotados y cuerpos de texto contenidos | el contexto del agente es escaso y `grep` es lineal | arnés de ACM-05 con 10 000 filas; p95 y bytes observados |
 | NFR-ACM-05 | Compatibilidad con db-ai v0.2.0: solo operaciones documentadas; sin DDL ni triggers; PK textual no nula; política por prefijo | no se modifica el núcleo ni se asumen capacidades | `describe` muestra lectura, escritura y navegación; pruebas de política y esquema |
 | NFR-ACM-06 | Local-first: sin red; la base vive en el proyecto y funciona sin conexión | privacidad y portabilidad | ejecución con red deshabilitada; revisión de dependencias |
@@ -331,7 +331,7 @@ Las líneas base están medidas. M-ACM-01 a M-ACM-04 proceden de [evidence-bench
 | db-ai v0.2.0 | dependencia | la CLI implementada expone montajes, rutas, ETag, batch, política y auditoría conforme a sus contratos | hecho / decisión aprobada | ACM no puede operar | pruebas de integración y revisión de contrato; el README declara el estado |
 | PK textual no nula | supuesto | una PK `TEXT NOT NULL` es navegable en db-ai | hecho observado | la tabla queda no navegable y ACM no puede usar rutas | el esquema usa `TEXT NOT NULL PRIMARY KEY`; `describe` lo confirma |
 | Bootstrap del esquema | dependencia | el operador ejecuta `init.sh`, que aplica el DDL una vez con SQLite fuera de db-ai | dependencia | no hay base utilizable | runbook y `schema_version`; `init.sh` idempotente; db-ai no hace DDL |
-| `.agent-memory/` ignorado | dependencia | el proyecto anfitrión excluye el directorio de memoria | dependencia | la memoria se versiona y se mezcla con el código | `git check-ignore`; tarea ACM-04/03 |
+| `.agent-memory/` fuera de Git por defecto | política del anfitrión | excluido por defecto, o solo la base versionada, según decida el anfitrión | decisión | los marcadores de formularios o los estados SQLite pasan al repositorio | reglas finas en `.gitignore`; `git check-ignore` |
 | Convenciones del proyecto | hipótesis | los agentes consolidan, sustituyen y revisan según las convenciones de `AGENTS.md` | hipótesis | la memoria se degrada aunque el esquema sea válido | validación ACM-05; revisión de las convenciones |
 | Comando de versión | hecho observado | `db-ai version` existe en el árbol y responde `{version, commit, state}`; el binario instalado puede no incluirlo hasta la release | hecho | no se puede confirmar la versión por CLI con el binario publicado | C-ACM-01 implementada en el árbol; commit y release sujetos a autorización del PO (tk-22) |
 | Engram como inspiración | decisión | Engram aporta vocabulario conceptual, no código que clonar | decisión | se desviaría el alcance hacia MCP o nube | revisión de fuentes; ACM no implementa MCP |

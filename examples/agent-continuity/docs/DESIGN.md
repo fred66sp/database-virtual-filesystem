@@ -48,7 +48,7 @@ El paquete de la skill agent-continuity (ACM-04) se desarrolla en `examples/agen
 | db-ai | acceso por rutas, precondiciones, transacciones, auditoría | DDL, migraciones, triggers, búsqueda semántica |
 | skill agent-continuity | protocolo de captura, consolidación y recuperación | motor de ejecución o daemon |
 | operador | inicializa el esquema, monta el alias y edita la política | identidad autenticada |
-| repositorio anfitrión | excluye `.agent-memory/` de Git | copia de seguridad automática |
+| repositorio anfitrión | decide el versionado de `.agent-memory/`; por defecto la excluye de Git | copia de seguridad automática |
 
 No hay proceso en segundo plano, hook de sesión ni planificador. La captura ocurre cuando el agente invoca la skill y decide consolidar. La auditoría de las operaciones la produce db-ai en su formato local (DESIGN de db-ai §11); ACM no duplica ese registro. La trazabilidad de conocimiento vive en las columnas de procedencia de cada fila.
 
@@ -57,7 +57,7 @@ No hay proceso en segundo plano, hook de sesión ni planificador. La captura ocu
 ### 3.1 Ruta y alias
 
 - Una base por proyecto: `.agent-memory/memory.db`, relativa a la raíz del proyecto que usa la memoria.
-- El directorio `.agent-memory/` queda excluido por `.gitignore` del proyecto anfitrión. La memoria no se versiona con el código.
+- Por defecto, el directorio `.agent-memory/` queda excluido por `.gitignore` del proyecto anfitrión. El anfitrión puede decidir versionar la memoria: solo la base `memory.db`, con `acm-forms/` y los estados `*.db-wal`/`*.db-shm` excluidos.
 - El operador monta el fichero como alias `mem`, con `--mode rw` y la política de §6. Un observador de solo lectura puede montarlo en `ro`; ACM no necesita escritura para recuperar.
 - `mount` y `umount` son operaciones del operador, no del agente (DESIGN de db-ai §9 y skill `db-ai`).
 
@@ -80,7 +80,7 @@ La skill guarda el `project_key` esperado en su configuración de proyecto, fuer
 
 `init.sh` implementa este bootstrap; no es una nueva CLI de ACM. Por defecto crea una memoria limpia y `--demo` añade el fixture de `seed.sql`.
 
-1. Crear `.agent-memory/` y excluirlo en `.gitignore`.
+1. Crear `.agent-memory/` y configurar `.gitignore`: por defecto excluido; el anfitrión puede decidir versionar solo la base.
 2. Tomar el mismo `flock` exclusivo que db-ai sobre `$XDG_CONFIG_HOME/db-ai/config.lock`, para que la mezcla de `config.json` no pierda montajes escritos por otro proceso.
 3. Aplicar el DDL de §4.8 y las filas de `meta` de §3.2 en una sola transacción con `-bail` y `PRAGMA foreign_keys = ON`; si algo falla, la transacción se revierte y no se publica una base a medias.
 4. Con `--demo`, aplicar `seed.sql` en la misma transacción y solo sobre una base nueva.
@@ -733,6 +733,6 @@ La comprobación de navegabilidad confirma la regla de §4.1: con `id TEXT NOT N
 | Política no es seguridad | acceso directo al fichero la salta | permisos del sistema operativo; límite declarado |
 | Evolución del esquema | filas incompatibles | `schema_version`, migración aditiva revisada y copia previa |
 | Reloj y UUIDv7 | recencia incorrecta por desfase | UTC, UUIDv7 monótono y ventanas acotadas |
-| Bootstrap y copia | base perdida si no se copia | runbook del operador; `.agent-memory/` fuera de Git |
+| Bootstrap y copia | base perdida si no se copia | runbook del operador; fuera de Git por defecto, o versionada según decida el anfitrión |
 | Dependencia de db-ai | un cambio de contrato rompe ACM | fijar v0.2.0 y probar la integración antes de subir versión |
 | Versión desplegada | `db-ai version` existe en el árbol, pero el binario instalado puede ser anterior | verificar `version` y `commit` antes de confiar en el contrato; release con autorización del PO |
