@@ -168,11 +168,325 @@
       <div class="splitter" id="split-left" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar el árbol" aria-valuemin="168" aria-valuemax="320" :aria-valuenow="treeWidth" @pointerdown="startResize('tree', $event)" @pointermove="moveResize" @pointerup="endResize" @pointercancel="endResize" @keydown="resizeKey('tree', $event)"></div>
 
       <section class="main" :aria-label="mainLabel">
-        <div class="welcome" v-if="!tablePath">
-          <h2>db-ai Visual Explorer</h2>
-          <p>Selecciona un montaje y después una tabla en el árbol para explorar sus registros.</p>
-          <p class="hint">Superficie de solo lectura: recorre mounts → tabla → registro sin conocer el esquema por adelantado.</p>
-        </div>
+        <section class="dashboard" v-if="!tablePath" aria-labelledby="dash-title">
+          <header class="dash-head">
+            <div class="dash-head-text">
+              <h2 id="dash-title" class="dash-title">Resumen del sistema</h2>
+              <p class="dash-sub">{{ dashSubtitle }}</p>
+            </div>
+            <span v-if="dashRefreshing" class="dash-busy" role="status">Actualizando…</span>
+            <button class="btn dash-refresh" type="button" :disabled="dashLoading || dashRefreshing" v-tip="tips.dashRefresh" @click="loadDashboardRefresh">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.4"/><path d="M13.6 2.8v4.1h-4.1"/></svg>
+              <span>{{ 'Actualizar estadísticas' }}</span>
+            </button>
+          </header>
+
+          <div class="dash-state" v-if="dashLoading" role="status">
+            <span class="dash-spinner" aria-hidden="true"></span>
+            <p>Cargando estadísticas del sistema…</p>
+          </div>
+
+          <div class="err-panel dash-err" role="alert" v-else-if="dashGeneralError">
+            <p class="err-code">{{ dashGeneralError.code }}</p>
+            <p>{{ dashGeneralError.message }}</p>
+            <button class="btn" type="button" @click="loadDashboard">Reintentar</button>
+          </div>
+
+          <p class="dash-state" v-else-if="!dashGeneral">No hay datos disponibles.</p>
+
+          <template v-else>
+            <div class="dash-state" v-if="dashNoMounts" role="status">
+              <p>Sin montajes registrados.</p>
+              <p class="dash-state-sub">Este explorador no encuentra ninguna base de datos montada. Revisa la configuración de db-ai serve.</p>
+            </div>
+            <p class="dash-note dash-state" v-else-if="dashNoTables" role="status">Los montajes registrados no tienen tablas.</p>
+
+            <section class="dash-section" aria-labelledby="dash-general-title">
+              <header class="dash-section-head">
+                <h3 id="dash-general-title">Contexto general</h3>
+                <span class="dash-warn" v-if="dashGeneral.partial">Datos parciales: el listado de montajes o algún recuento no se pudo completar.</span>
+              </header>
+              <div class="dash-kpis">
+                <article class="dash-kpi" tabindex="0" v-tip="tips.dashKpiMounts">
+                  <div class="dash-kpi-top">
+                    <span class="dash-kpi-label">Montajes</span>
+                    <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.6" rx="5" ry="1.9"/><path d="M3 3.6v8.8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9V3.6"/><path d="M3 8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9"/></svg></span>
+                  </div>
+                  <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashGeneral.totals.mounts) }">{{ dashNum(dashGeneral.totals.mounts) }}</span>
+                  <span class="dash-kpi-note">Bases montadas y consultables.</span>
+                </article>
+                <article class="dash-kpi" tabindex="0" v-tip="tips.dashKpiTables">
+                  <div class="dash-kpi-top">
+                    <span class="dash-kpi-label">Tablas</span>
+                    <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+                  </div>
+                  <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashGeneral.totals.tables) }">{{ dashNum(dashGeneral.totals.tables) }}</span>
+                  <span class="dash-kpi-note">Tablas visibles en todos los montajes.</span>
+                </article>
+                <article class="dash-kpi" tabindex="0" v-tip="tips.dashKpiRecords">
+                  <div class="dash-kpi-top">
+                    <span class="dash-kpi-label">Registros</span>
+                    <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h12M2 12h12"/></svg></span>
+                  </div>
+                  <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashGeneral.totals.records) }">{{ dashNum(dashGeneral.totals.records) }}</span>
+                  <span class="dash-kpi-note">Suma de recuentos confirmados; si uno falla, no se inventa un total.</span>
+                </article>
+                <article class="dash-kpi" tabindex="0" v-tip="tips.dashKpiAccessible">
+                  <div class="dash-kpi-top">
+                    <span class="dash-kpi-label">Montajes accesibles</span>
+                    <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><path d="M5.4 8.2l1.8 1.8 3.4-3.6"/></svg></span>
+                  </div>
+                  <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashGeneral.totals.accessibleMounts) }">{{ dashNum(dashGeneral.totals.accessibleMounts) }}</span>
+                  <span class="dash-kpi-note" v-if="dashAvailable(dashGeneral.totals.inaccessibleMounts) && dashGeneral.totals.inaccessibleMounts > 0">{{ dashNum(dashGeneral.totals.inaccessibleMounts) }} sin acceso.</span>
+                  <span class="dash-kpi-note" v-else>Se pudieron listar sin error.</span>
+                </article>
+              </div>
+
+              <details class="dash-errors" v-if="dashGeneral.errors && dashGeneral.errors.length">
+                <summary>{{ dashGeneral.errors.length }} {{ dashGeneral.errors.length === 1 ? 'incidencia de consulta' : 'incidencias de consulta' }}</summary>
+                <ul>
+                  <li v-for="(item, i) in dashGeneral.errors" :key="i"><b>{{ item.scope }}</b> · {{ item.code }} · {{ item.message }}</li>
+                </ul>
+              </details>
+            </section>
+
+            <div class="err-panel dash-err" role="alert" v-if="dashDetectError">
+              <p class="err-code">{{ dashDetectError.code }}</p>
+              <p>{{ dashDetectError.message }}</p>
+              <button class="btn" type="button" @click="loadDashboard({ refresh: true })">Reintentar</button>
+            </div>
+
+            <div class="dash-state" v-else-if="dashGeneral.totals.mounts > 0 && !dashAcmAlias" role="status">
+              <p>ACM no detectado.</p>
+              <p class="dash-state-sub">Ningún montaje expone la estructura de sesiones, observaciones, checkpoints y preferencias de la memoria ACM. El contador de montajes y tablas de arriba sigue siendo válido.</p>
+            </div>
+
+            <div class="err-panel dash-err" role="alert" v-else-if="dashAcmError">
+              <p class="err-code">{{ dashAcmError.code }}</p>
+              <p>{{ dashAcmError.message }}</p>
+              <button class="btn" type="button" @click="loadDashboard({ refresh: true })">Reintentar</button>
+            </div>
+
+            <template v-else-if="dashAcm">
+              <section class="dash-section" aria-labelledby="dash-acm-title">
+                <header class="dash-section-head">
+                  <h3 id="dash-acm-title">Memoria ACM</h3>
+                  <label class="dash-alias" v-if="dashAcmAliases.length > 1">
+                    Montaje
+                    <select :value="dashAcmAlias" aria-label="Montaje ACM que se resumen" @change="selectDashAlias($event.target.value)">
+                      <option v-for="alias in dashAcmAliases" :key="alias" :value="alias">{{ alias }}</option>
+                    </select>
+                  </label>
+                  <span class="dash-section-note" v-else>Montaje <b>{{ dashAcm.alias }}</b></span>
+                  <span class="dash-warn" v-if="dashAcm.partial">Datos parciales: parte de la memoria ACM no se pudo leer.</span>
+                  <span class="dash-warn" v-if="dashAcm.errors && dashAcm.errors.length">{{ dashAcm.errors.length }} {{ dashAcm.errors.length === 1 ? 'consulta fallida' : 'consultas fallidas' }}</span>
+                </header>
+                <div class="dash-kpis">
+                  <button class="dash-kpi is-link" type="button" @click="openDashboardTable('sessions')" v-tip="tips.dashKpiSessions">
+                    <div class="dash-kpi-top">
+                      <span class="dash-kpi-label">Sesiones</span>
+                      <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.4"/></svg></span>
+                    </div>
+                    <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashAcm.kpis.sessions) }">{{ dashNum(dashAcm.kpis.sessions) }}</span>
+                    <span class="dash-kpi-note">Abrir la tabla de sesiones.</span>
+                  </button>
+                  <button class="dash-kpi is-link" type="button" @click="openDashboardTable('observations')" v-tip="tips.dashKpiObservations">
+                    <div class="dash-kpi-top">
+                      <span class="dash-kpi-label">Observaciones</span>
+                      <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.4 8s2.2-3.4 5.6-3.4 5.6 3.4 5.6 3.4-2.2 3.4-5.6 3.4S2.4 8 2.4 8z"/><circle cx="8" cy="8" r="1.5"/></svg></span>
+                    </div>
+                    <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashAcm.kpis.observations) }">{{ dashNum(dashAcm.kpis.observations) }}</span>
+                    <span class="dash-kpi-note">Abrir la tabla de observaciones.</span>
+                  </button>
+                  <button class="dash-kpi is-link" type="button" @click="openDashboardTable('checkpoints')" v-tip="tips.dashKpiCheckpoints">
+                    <div class="dash-kpi-top">
+                      <span class="dash-kpi-label">Checkpoints</span>
+                      <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5v11M4 3h8l-1.6 2.5L12 8H4"/></svg></span>
+                    </div>
+                    <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashAcm.kpis.checkpoints) }">{{ dashNum(dashAcm.kpis.checkpoints) }}</span>
+                    <span class="dash-kpi-note">Abrir la tabla de checkpoints.</span>
+                  </button>
+                  <button class="dash-kpi is-link" type="button" @click="openDashboardTable('preferences')" v-tip="tips.dashKpiPreferences">
+                    <div class="dash-kpi-top">
+                      <span class="dash-kpi-label">Preferencias</span>
+                      <span class="dash-kpi-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.5h10M3 8h10M3 11.5h10"/><circle cx="6" cy="4.5" r="1.2"/><circle cx="10" cy="8" r="1.2"/><circle cx="5" cy="11.5" r="1.2"/></svg></span>
+                    </div>
+                    <span class="dash-kpi-value" :class="{ 'is-na': !dashAvailable(dashAcm.kpis.preferences) }">{{ dashNum(dashAcm.kpis.preferences) }}</span>
+                    <span class="dash-kpi-note">Abrir la tabla de preferencias.</span>
+                  </button>
+                </div>
+                <details class="dash-errors" v-if="dashAcm.errors && dashAcm.errors.length">
+                  <summary>{{ dashAcm.errors.length }} {{ dashAcm.errors.length === 1 ? 'consulta ACM con error' : 'consultas ACM con error' }}</summary>
+                  <ul>
+                    <li v-for="(item, i) in dashAcm.errors" :key="i"><b>{{ item.scope }}</b> · {{ item.code }} · {{ item.message }}</li>
+                  </ul>
+                </details>
+              </section>
+
+              <div class="dash-state" v-if="dashAcmEmpty" role="status">
+                <p>La memoria ACM está vacía.</p>
+                <p class="dash-state-sub">Las tablas respondieron cero registros. Los accesos inferiores siguen disponibles para abrirlas.</p>
+              </div>
+
+              <template v-else>
+                <section class="dash-grid dash-grid-donuts" aria-label="Distribución y estado de la memoria ACM">
+                  <article class="dash-card">
+                    <header class="dash-card-head">
+                      <h3>Distribución de la memoria ACM</h3>
+                      <span class="dash-card-meta">Total {{ dashNum(dashAcm.distributionTotal) }}</span>
+                    </header>
+                    <div class="dash-donut-wrap">
+                      <svg class="dash-donut" viewBox="0 0 100 100" role="img" :aria-label="dashDistributionAria">
+                        <circle class="donut-track" cx="50" cy="50" r="40"/>
+                        <circle v-for="s in dashSegments(dashDistribution)" :key="s.key" class="donut-seg" :style="{ stroke: dashColor(s.key) }" cx="50" cy="50" r="40" transform="rotate(-90 50 50)" :stroke-dasharray="s.dash" :stroke-dashoffset="s.off" @click="openDashboardTable(s.key)"/>
+                        <text class="donut-total" :class="{ 'is-na': !dashAvailable(dashAcm.distributionTotal) }" x="50" y="49" text-anchor="middle">{{ dashNum(dashAcm.distributionTotal) }}</text>
+                        <text class="donut-cap" x="50" y="61" text-anchor="middle">registros</text>
+                      </svg>
+                      <ul class="dash-legend" aria-label="Distribución por tabla">
+                        <li v-for="item in dashDistribution" :key="item.key">
+                          <button class="dash-legend-row" type="button" v-tip="'Abrir la tabla ' + item.label" @click="openDashboardTable(item.key)">
+                            <span class="dash-swatch" :style="{ background: dashColor(item.key) }" aria-hidden="true"></span>
+                            <span class="dash-legend-label">{{ item.label }}</span>
+                            <span class="dash-legend-count">{{ dashNum(item.count) }}</span>
+                            <span class="dash-legend-pct">{{ dashPct(item.pct) }}</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </article>
+
+                  <article class="dash-card">
+                    <header class="dash-card-head">
+                      <h3>Estado del conocimiento</h3>
+                      <span class="dash-card-meta">Total {{ dashNum(dashAcm.knowledgeTotal) }}</span>
+                    </header>
+                    <p class="dash-card-note">Suma observaciones, checkpoints y preferencias; las sesiones tienen su propio ciclo de vida y quedan fuera de este total.</p>
+                    <div class="dash-donut-wrap">
+                      <svg class="dash-donut" viewBox="0 0 100 100" role="img" :aria-label="dashKnowledgeAria">
+                        <circle class="donut-track" cx="50" cy="50" r="40"/>
+                        <circle v-for="s in dashSegments(dashKnowledge)" :key="s.key" class="donut-seg" :style="{ stroke: dashColor(s.key) }" cx="50" cy="50" r="40" transform="rotate(-90 50 50)" :stroke-dasharray="s.dash" :stroke-dashoffset="s.off" @click="selectKnowledgeStatus(s.key)"/>
+                        <text class="donut-total" :class="{ 'is-na': !dashAvailable(dashAcm.knowledgeTotal) }" x="50" y="49" text-anchor="middle">{{ dashNum(dashAcm.knowledgeTotal) }}</text>
+                        <text class="donut-cap" x="50" y="61" text-anchor="middle">elementos</text>
+                      </svg>
+                      <ul class="dash-legend" aria-label="Estado del conocimiento">
+                        <li v-for="item in dashKnowledge" :key="item.key">
+                          <button class="dash-legend-row" :class="{ selected: dashKnowledgeStatus === item.key }" type="button" :aria-pressed="dashKnowledgeStatus === item.key ? 'true' : 'false'" v-tip="'Elegir las tablas con estado ' + item.label" @click="selectKnowledgeStatus(item.key)">
+                            <span class="dash-swatch" :style="{ background: dashColor(item.key) }" aria-hidden="true"></span>
+                            <span class="dash-legend-label">{{ item.label }}</span>
+                            <span class="dash-legend-count">{{ dashNum(item.count) }}</span>
+                            <span class="dash-legend-pct">{{ dashPct(item.pct) }}</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="dash-dest" v-if="dashKnowledgeFilter(dashKnowledgeStatus)">
+                      <span class="dash-dest-label">Abrir «{{ dashKnowledgeLabel }}» en:</span>
+                      <button v-for="table in dashKnowledgeTables" :key="table" class="btn btn-small" type="button" @click="openKnowledgeTable(table)">{{ graphTableLabel(table) }}</button>
+                      <button class="btn btn-small dash-dest-clear" type="button" aria-label="Cerrar los destinos del estado" @click="dashKnowledgeStatus = ''">Cerrar</button>
+                    </div>
+                    <p class="dash-warn" v-else-if="dashKnowledgeStatus">Esta categoría del agregado no identifica un valor de estado filtrable; no se ofrece un destino.</p>
+                  </article>
+                </section>
+
+                <div class="dash-grid dash-grid-lists">
+                  <article class="dash-card">
+                    <header class="dash-card-head">
+                      <h3>Observaciones por tipo</h3>
+                      <span class="dash-card-meta">{{ dashNum(dashAcm.observationKindsTotal) }} observaciones</span>
+                    </header>
+                    <p class="dash-note" v-if="!dashObservationKinds.length">Sin observaciones que clasificar.</p>
+                    <ul class="dash-kind-list" v-else aria-label="Observaciones por tipo">
+                      <li v-for="item in dashObservationKinds" :key="item.key">
+                        <button class="dash-kind-row" type="button" v-tip="'Abrir observaciones con kind ' + item.key" @click="openObservationKind(item.key)">
+                          <span class="dash-kind-label">{{ dashKindLabel(item.key) }}<span class="dash-kind-code">{{ item.key }}</span></span>
+                          <span class="dash-kind-track" aria-hidden="true"><span class="dash-kind-fill" v-if="dashAvailable(item.pct)" :style="{ width: item.pct + '%' }"></span></span>
+                          <span class="dash-kind-count">{{ dashNum(item.count) }}</span>
+                          <span class="dash-kind-pct">{{ dashPct(item.pct) }}</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </article>
+
+                  <article class="dash-card">
+                    <header class="dash-card-head">
+                      <h3>Sesiones recientes</h3>
+                      <span class="dash-card-meta">Fechas en UTC</span>
+                    </header>
+                    <p class="dash-note" v-if="!dashAcm.recentSessions || !dashAcm.recentSessions.length">No hay sesiones que mostrar.</p>
+                    <ul class="dash-session-list" v-else aria-label="Últimas sesiones ACM">
+                      <li v-for="session in dashAcm.recentSessions" :key="session.id + ':' + session.path">
+                        <button class="dash-session" type="button" :disabled="!session.path" v-tip="'Abrir el registro de esta sesión'" @click="activateRow(session.path)">
+                          <span class="dash-session-goal">{{ session.goal || '(sin objetivo)' }}</span>
+                          <span class="dash-session-meta">
+                            <span>{{ session.agentId || 'agente sin identificar' }}</span>
+                            <span class="dotsep" aria-hidden="true"></span>
+                            <span class="dash-session-status">{{ dashSessionStatus(session.status) }}</span>
+                            <span class="dotsep" aria-hidden="true"></span>
+                            <span>{{ dashDay(session.startedAt) }}</span>
+                            <span v-if="session.endedAt"> → {{ dashDay(session.endedAt) }}</span>
+                          </span>
+                        </button>
+                      </li>
+                    </ul>
+                  </article>
+                </div>
+
+                <article class="dash-card dash-card-wide">
+                  <header class="dash-card-head dash-timeline-head">
+                    <h3>Actividad por fecha de creación</h3>
+                    <div class="dash-timeline-controls">
+                      <label class="dash-control">Agrupación
+                        <select v-model="dashGranularity" aria-label="Agrupación temporal">
+                          <option value="day">Día</option>
+                          <option value="week">Semana</option>
+                          <option value="month">Mes</option>
+                        </select>
+                      </label>
+                      <label class="dash-control">Intervalo
+                        <select v-model.number="dashInterval" aria-label="Intervalo del gráfico temporal">
+                          <option :value="7">7 días</option>
+                          <option :value="30">30 días</option>
+                          <option :value="90">90 días</option>
+                          <option :value="365">365 días</option>
+                          <option :value="0">Todo</option>
+                        </select>
+                      </label>
+                      <span class="dash-card-meta">UTC</span>
+                    </div>
+                  </header>
+                  <p class="dash-card-note">Serie construida con las fechas de creación reales; no se interpolan huecos ni puntos. Zona horaria UTC.</p>
+                  <p class="dash-warn" v-if="dashTimeline && dashTimeline.truncated">Datos parciales: alguna tabla se truncó al leer fechas; el gráfico solo suma lo leído.</p>
+                  <p class="dash-warn" v-if="dashAcm.timeline && dashAcm.timeline.invalidDates">{{ num(dashAcm.timeline.invalidDates) }} {{ dashAcm.timeline.invalidDates === 1 ? 'fecha inválida' : 'fechas inválidas' }} no {{ dashAcm.timeline.invalidDates === 1 ? 'se ha' : 'se han' }} graficado.</p>
+                  <div class="dash-timeline-scroll" v-if="dashTimeline && dashTimeline.buckets.length">
+                    <div class="dash-timeline" role="group" aria-label="Actividad por fecha de creación; pasa el foco por cada barra para ver fecha y cantidad">
+                      <button v-for="bucket in dashTimeline.buckets" :key="bucket.start" class="dash-tbar" :class="{ 'is-zero': !bucket.count }" type="button" :style="{ height: dashBarHeight(bucket.count) }" v-tip="timelineTip(bucket)" :aria-label="timelineLabel(bucket)"></button>
+                    </div>
+                  </div>
+                  <p class="dash-note" v-else>Sin fechas válidas en el intervalo seleccionado.</p>
+                  <div class="dash-timeline-foot" v-if="dashTimeline && dashTimeline.buckets.length">
+                    <span>{{ dashTimeline.firstLabel }}</span>
+                    <span class="dash-timeline-axis" aria-hidden="true"></span>
+                    <span>{{ dashTimeline.lastLabel }}</span>
+                    <span class="dash-card-meta">{{ dashTimeline.countLabel }} · zona horaria UTC · agrupación por {{ dashTimeline.granularityLabel }}</span>
+                  </div>
+                </article>
+              </template>
+
+              <section class="dash-card dash-shortcuts" aria-labelledby="dash-shortcuts-title">
+                <header class="dash-card-head">
+                  <h3 id="dash-shortcuts-title">Accesos al montaje ACM</h3>
+                  <span class="dash-card-meta">{{ dashAcmAlias }}</span>
+                </header>
+                <div class="dash-links">
+                  <button class="btn dash-link" type="button" v-tip="tips.dashAcmObservations" @click="openDashboardTable('observations')"><span>Explorar observaciones</span></button>
+                  <button class="btn dash-link" type="button" v-tip="tips.dashAcmSessions" @click="openDashboardTable('sessions')"><span>Consultar sesiones</span></button>
+                  <button class="btn dash-link" type="button" v-tip="tips.dashAcmCheckpoints" @click="openDashboardTable('checkpoints')"><span>Ver checkpoints</span></button>
+                  <button class="btn dash-link" type="button" v-tip="tips.dashOpenGraph" @click="openDashboardGraph"><span>Abrir Grafo ACM</span></button>
+                </div>
+              </section>
+            </template>
+          </template>
+        </section>
 
         <template v-else>
           <div class="table-head">

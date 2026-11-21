@@ -25,8 +25,42 @@ const GRAPH_FILTERS_EMPTY = Object.freeze({
   topic: "",
   related: false,
 });
+const DASH_KNOWLEDGE_TABLES = Object.freeze(["observations", "checkpoints", "preferences"]);
+const DASH_KIND_LABELS = Object.freeze({
+  decision: "Decisión",
+  learning: "Aprendizaje",
+  discovery: "Hallazgo",
+  pattern: "Patrón",
+  bugfix: "Corrección",
+  architecture: "Arquitectura",
+});
+const DASH_SESSION_STATUS_LABELS = Object.freeze({
+  open: "Abierta",
+  closed: "Cerrada",
+  abandoned: "Abandonada",
+});
+const DASH_KNOWLEDGE_FILTERS = Object.freeze(["active", "superseded", "obsolete", "needs_review"]);
+const DASH_COLORS = Object.freeze({
+  sessions: "#7aa7ff",
+  observations: "#6fdc9a",
+  checkpoints: "#e8c07a",
+  preferences: "#c0a6ff",
+  active: "#6fdc9a",
+  superseded: "#e8c07a",
+  obsolete: "#8b96a8",
+  needs_review: "#c0a6ff",
+  open: "#7aa7ff",
+  closed: "#8b96a8",
+  abandoned: "#ff8a8a",
+});
+const DASH_PCT_EMPTY = Object.freeze({
+  distribution: [],
+  knowledge: [],
+  kinds: [],
+});
 
 let acmAdapterPromise = null;
+let dashboardModulePromise = null;
 let forceGraphPromise = null;
 
 function loadAcmAdapter() {
@@ -37,6 +71,16 @@ function loadAcmAdapter() {
     });
   }
   return acmAdapterPromise;
+}
+
+function loadDashboardModule() {
+  if (!dashboardModulePromise) {
+    dashboardModulePromise = import("./dashboard-data.js").catch((error) => {
+      dashboardModulePromise = null;
+      throw error;
+    });
+  }
+  return dashboardModulePromise;
 }
 
 function loadForceGraphLib() {
@@ -62,6 +106,16 @@ function loadForceGraphLib() {
 
 const fmtInt = new Intl.NumberFormat("es-ES");
 const fmtReal = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 6 });
+const fmtDashDay = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "UTC", day: "numeric", month: "short", year: "numeric",
+});
+const fmtDashMonth = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "UTC", month: "long", year: "numeric",
+});
+const fmtDashDateTime = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "UTC", day: "numeric", month: "short", year: "numeric",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
 
 function normErr(e) {
   if (e && e.code) return { code: String(e.code), message: String(e.message || "") };
@@ -120,6 +174,19 @@ const TIPS = Object.freeze({
   graphReset: "Limpia los filtros del grafo y vuelve a ajustar el encuadre.",
   graphRefresh: "Vuelve a leer la memoria ACM. Conserva la selección y el encuadre si el nodo sigue existiendo.",
   refresh: "Vuelve a consultar los datos de la vista actual.",
+  dashRefresh: "Vuelve a consultar los montajes, la detección ACM y sus estadísticas, y repinta el dashboard sin recargar la página.",
+  dashKpiMounts: "Bases de datos montadas y registradas en db-ai; cada una es un punto de entrada al árbol.",
+  dashKpiTables: "Tablas expuestas por todos los montajes. Un recuento fallido no se muestra como cero.",
+  dashKpiRecords: "Suma de los recuentos confirmados de cada tabla. Si algún recuento falla, el total queda «No disponible».",
+  dashKpiAccessible: "Montajes que se pudieron listar y consultar sin error. Los demás aparecen como no accesibles.",
+  dashKpiSessions: "Sesiones registradas en la memoria ACM. Pulsa para abrir la tabla de sesiones.",
+  dashKpiObservations: "Observaciones de la memoria ACM. Pulsa para abrir la tabla de observaciones.",
+  dashKpiCheckpoints: "Checkpoints de la memoria ACM. Pulsa para abrir la tabla de checkpoints.",
+  dashKpiPreferences: "Preferencias guardadas en la memoria ACM. Pulsa para abrir la tabla de preferencias.",
+  dashAcmObservations: "Abre la tabla de observaciones del montaje ACM actual.",
+  dashAcmSessions: "Abre la tabla de sesiones del montaje ACM actual.",
+  dashAcmCheckpoints: "Abre la tabla de checkpoints del montaje ACM actual.",
+  dashOpenGraph: "Abre el Grafo ACM del montaje actual: sesiones, observaciones, checkpoints y preferencias.",
   help: "Abre la ayuda: cómo empezar, navegación básica, búsqueda, filtros, inspector, grafo ACM y conceptos.",
 });
 
@@ -325,6 +392,22 @@ const app = Vue.createApp({
       graphTableKinds: GRAPH_TABLES,
       graphReq: 0,
 
+      dashLoading: false,
+      dashRefreshing: false,
+      dashGeneral: null,
+      dashGeneralError: null,
+      dashAcmAliases: [],
+      dashDetectError: null,
+      dashAcmAlias: "",
+      dashAcm: null,
+      dashAcmError: null,
+      dashPercentages: { ...DASH_PCT_EMPTY },
+      dashUpdatedAt: "",
+      dashGranularity: "day",
+      dashInterval: 90,
+      dashKnowledgeStatus: "",
+      dashReq: 0,
+
       toast: "",
       toastTimer: null,
 
@@ -343,6 +426,10 @@ const app = Vue.createApp({
     this.graphFramed = false;
     this.graphEnginePaused = false;
     this.graphPositions = new Map();
+    /* El módulo de datos se guarda fuera de la reactividad: aporta funciones
+       puras (regroup, percentages) que no deben volverse proxies. */
+    this.dashModule = null;
+    this.dashAbort = null;
   },
 
   computed: {
@@ -404,6 +491,7 @@ const app = Vue.createApp({
       return this.lastETag ? TIPS.etag + " Valor completo: " + this.lastETag : TIPS.etag;
     },
     mainLabel() {
+      if (!this.tablePath) return "Resumen del sistema";
       return this.viewMode === "graph" ? "Grafo ACM" : "Vista tabular";
     },
     graphHasFilters() {
@@ -441,6 +529,93 @@ const app = Vue.createApp({
     },
     graphZoomLabel() {
       return Math.round(this.graphZoomPct) + " %";
+    },
+    dashSubtitle() {
+      const parts = [];
+      if (this.dashGeneral && this.dashGeneral.totals) {
+        const n = this.dashGeneral.totals.mounts;
+        parts.push(this.dashAvailable(n)
+          ? this.num(n) + (n === 1 ? " montaje registrado" : " montajes registrados")
+          : "Montajes no disponibles");
+        const tables = this.dashGeneral.totals.tables;
+        if (this.dashAvailable(tables)) parts.push(this.num(tables) + (tables === 1 ? " tabla" : " tablas"));
+      }
+      if (this.dashAcmAlias) parts.push("ACM en " + this.dashAcmAlias);
+      if (this.dashUpdatedAt) parts.push("actualizado " + this.dashDate(this.dashUpdatedAt) + " UTC");
+      return parts.join(" · ");
+    },
+    dashNoMounts() {
+      return Boolean(this.dashGeneral && this.dashGeneral.totals.mounts === 0);
+    },
+    dashNoTables() {
+      return Boolean(this.dashGeneral && this.dashGeneral.totals.mounts > 0 && this.dashGeneral.totals.tables === 0);
+    },
+    dashDistribution() {
+      return this.mergeDashPct(this.dashAcm ? this.dashAcm.distribution : [], this.dashPercentages.distribution);
+    },
+    dashKnowledge() {
+      return this.mergeDashPct(this.dashAcm ? this.dashAcm.knowledge : [], this.dashPercentages.knowledge);
+    },
+    dashObservationKinds() {
+      return this.mergeDashPct(this.dashAcm ? this.dashAcm.observationKinds : [], this.dashPercentages.kinds);
+    },
+    dashKnowledgeTables() { return DASH_KNOWLEDGE_TABLES; },
+    dashKnowledgeLabel() {
+      const item = this.dashKnowledge.find((entry) => entry.key === this.dashKnowledgeStatus);
+      return item ? item.label : this.dashKnowledgeStatus;
+    },
+    dashAcmEmpty() {
+      const acm = this.dashAcm;
+      return Boolean(acm && acm.distributionTotal === 0 && !acm.partial && !(acm.errors && acm.errors.length));
+    },
+    dashDistributionAria() {
+      const total = this.dashAcm ? this.dashAcm.distributionTotal : null;
+      const parts = this.dashDistribution.map((item) => item.label + ": " + this.dashNum(item.count) + " (" + this.dashPct(item.pct) + ")");
+      return "Distribución de la memoria ACM. Total " + this.dashNum(total) + ". " + parts.join("; ") + ".";
+    },
+    dashKnowledgeAria() {
+      const total = this.dashAcm ? this.dashAcm.knowledgeTotal : null;
+      const parts = this.dashKnowledge.map((item) => item.label + ": " + this.dashNum(item.count) + " (" + this.dashPct(item.pct) + ")");
+      return "Estado del conocimiento ACM, sin sesiones. Total " + this.dashNum(total) + ". " + parts.join("; ") + ".";
+    },
+    dashTimeline() {
+      const acm = this.dashAcm;
+      if (!acm || !acm.timeline) return null;
+      const timeline = acm.timeline;
+      const truncated = Boolean(timeline.truncated);
+      const invalidDates = timeline.invalidDates || 0;
+      let buckets = [];
+      if (this.dashModule && typeof this.dashModule.regroup === "function") {
+        try {
+          buckets = this.dashModule.regroup(timeline.buckets || [], this.dashGranularity);
+        } catch (error) {
+          return { buckets: [], truncated, invalidDates, error: normErr(error), firstLabel: "", lastLabel: "", max: 0, total: 0, countLabel: "", granularityLabel: "" };
+        }
+      }
+      const interval = Number(this.dashInterval);
+      let shown = buckets;
+      if (interval > 0 && buckets.length) {
+        const last = Date.parse(buckets[buckets.length - 1].start);
+        if (Number.isFinite(last)) {
+          const cutoff = last - ((interval - 1) * 86400000);
+          shown = buckets.filter((bucket) => Date.parse(bucket.start) >= cutoff);
+        }
+      }
+      const total = shown.reduce((sum, bucket) => sum + bucket.count, 0);
+      const max = shown.reduce((value, bucket) => Math.max(value, bucket.count), 0);
+      const granularityLabel = { day: "días", week: "semanas", month: "meses" }[this.dashGranularity] || "días";
+      return {
+        buckets: shown,
+        max,
+        total,
+        truncated,
+        invalidDates,
+        granularityLabel: granularityLabel,
+        timezone: timeline.timezone || "UTC",
+        firstLabel: shown.length ? this.dashBucketLabel(shown[0].start) : "",
+        lastLabel: shown.length ? this.dashBucketLabel(shown[shown.length - 1].start) : "",
+        countLabel: this.num(total) + (total === 1 ? " registro" : " registros"),
+      };
     },
   },
 
@@ -638,7 +813,15 @@ const app = Vue.createApp({
         this.viewMode = "table";
         this.pauseGraph();
       }
-      if (this.tablePath === path) return;
+      if (this.tablePath === path) {
+        /* Un destino filtrado sobre la tabla ya abierta reaplica el filtro;
+           sin filtros se conserva el comportamiento previo. */
+        if (options.filters && options.filters.length) {
+          this.filters = this.normalizeDashFilters(options.filters);
+          this.applyQueryChange();
+        }
+        return;
+      }
       this.reqId++;
       const my = this.reqId;
 
@@ -658,7 +841,7 @@ const app = Vue.createApp({
       this.selectedFields = null;
       this.selectedETag = "";
       this.highlightField = "";
-      this.filters = [];
+      this.filters = this.normalizeDashFilters(options.filters);
       this.filterError = null;
       this.filterOpen = false;
       this.searchText = "";
@@ -996,7 +1179,10 @@ const app = Vue.createApp({
       if (this.compact) this.closeDrawer();
       else this.setInspector(false);
     },
-    goRoot() { this.clearTable(); },
+    goRoot() {
+      this.clearTable();
+      if (!this.dashGeneral && !this.dashLoading && !this.dashGeneralError) this.loadDashboard();
+    },
     goMount() {
       const alias = this.mountAlias;
       this.clearTable();
@@ -1559,6 +1745,210 @@ const app = Vue.createApp({
     },
 
 
+    /* ---------- dashboard ---------- */
+    loadDashboardRefresh() {
+      return this.loadDashboard({ refresh: true });
+    },
+    async loadDashboard(options) {
+      const refresh = Boolean(options && options.refresh);
+      if (this.dashLoading || this.dashRefreshing) return;
+      if (this.dashAbort) this.dashAbort.abort();
+      const controller = new AbortController();
+      this.dashAbort = controller;
+      const my = ++this.dashReq;
+      if (refresh) this.dashRefreshing = true;
+      else this.dashLoading = true;
+      this.dashGeneralError = null;
+      this.dashAcmError = null;
+      this.dashDetectError = null;
+      let phase = "general";
+
+      let module;
+      try {
+        module = await loadDashboardModule();
+      } catch (error) {
+        if (my !== this.dashReq) return;
+        this.dashGeneralError = {
+          code: "E_DASH_MODULE",
+          message: "No se pudo cargar la capa de datos del dashboard (dashboard-data.js).",
+        };
+        this.dashLoading = false;
+        this.dashRefreshing = false;
+        if (this.dashAbort === controller) this.dashAbort = null;
+        return;
+      }
+      this.dashModule = module;
+
+      try {
+        const api = module.createDashboardApi({ signal: controller.signal });
+        const general = await module.loadGeneralStats(api);
+        if (my !== this.dashReq) return;
+        this.dashGeneral = Vue.markRaw(general);
+        phase = "acm";
+
+        const detected = await module.detectAcmMounts(api);
+        if (my !== this.dashReq) return;
+        this.dashAcmAliases = detected.aliases || [];
+        this.dashDetectError = detected.error || null;
+        let alias = this.dashAcmAlias;
+        if (this.dashAcmAliases.indexOf(alias) === -1) alias = this.dashAcmAliases[0] || "";
+        this.dashAcmAlias = alias;
+
+        if (!alias) {
+          this.dashAcm = null;
+          this.dashPercentages = { ...DASH_PCT_EMPTY };
+        } else {
+          const acm = await module.loadAcmStats(api, { alias });
+          if (my !== this.dashReq) return;
+          this.dashAcm = Vue.markRaw(acm);
+          this.dashKnowledgeStatus = "";
+          this.dashPercentages = {
+            distribution: module.percentages(acm.distribution || []),
+            knowledge: module.percentages(acm.knowledge || []),
+            kinds: module.percentages(acm.observationKinds || []),
+          };
+        }
+        this.dashUpdatedAt = new Date().toISOString();
+        if (refresh) this.toastMsg("Estadísticas actualizadas");
+      } catch (error) {
+        if (my !== this.dashReq) return;
+        if (error && error.code === "E_ABORTED") return;
+        if (phase === "acm") {
+          this.dashAcm = null;
+          this.dashPercentages = { ...DASH_PCT_EMPTY };
+          this.dashAcmError = normErr(error);
+        } else {
+          this.dashGeneral = null;
+          this.dashAcm = null;
+          this.dashGeneralError = normErr(error);
+        }
+      } finally {
+        if (my === this.dashReq) {
+          this.dashLoading = false;
+          this.dashRefreshing = false;
+          if (this.dashAbort === controller) this.dashAbort = null;
+        }
+      }
+    },
+    selectDashAlias(alias) {
+      if (!alias || alias === this.dashAcmAlias) return;
+      this.dashAcmAlias = alias;
+      this.dashAcm = null;
+      this.dashPercentages = { ...DASH_PCT_EMPTY };
+      this.loadDashboard({ refresh: true });
+    },
+    dashTablePath(name) {
+      return this.dashAcmAlias ? "/" + this.dashAcmAlias + "/" + name : "";
+    },
+    openDashboardTable(name, filters) {
+      const path = this.dashTablePath(name);
+      if (!path) return;
+      this.openTable(path, filters && filters.length ? { filters } : {});
+    },
+    openObservationKind(kind) {
+      this.openDashboardTable("observations", [{ column: "kind", op: "=", value: kind }]);
+    },
+    selectKnowledgeStatus(key) {
+      this.dashKnowledgeStatus = key === this.dashKnowledgeStatus ? "" : key;
+    },
+    dashKnowledgeFilter(status) {
+      return DASH_KNOWLEDGE_FILTERS.indexOf(status) === -1 ? "" : status;
+    },
+    openKnowledgeTable(name) {
+      const status = this.dashKnowledgeFilter(this.dashKnowledgeStatus);
+      if (!status) return;
+      this.openDashboardTable(name, [{ column: "status", op: "=", value: status }]);
+    },
+    async openDashboardGraph() {
+      const path = this.dashTablePath("observations");
+      if (!path) return;
+      if (this.tablePath !== path) await this.openTable(path, { autoSelect: false });
+      this.setViewMode("graph");
+    },
+
+    /* ---------- dashboard formatting ---------- */
+    dashAvailable(value) { return value !== null && value !== undefined; },
+    dashNum(value) {
+      if (!this.dashAvailable(value)) return "No disponible";
+      return this.num(value);
+    },
+    dashPct(pct) {
+      return pct === null || pct === undefined ? "—" : pct + " %";
+    },
+    dashColor(key) {
+      return DASH_COLORS[key] || "#a3adbe";
+    },
+    dashKindLabel(key) {
+      return DASH_KIND_LABELS[key] || String(key || "");
+    },
+    dashSessionStatus(status) {
+      return DASH_SESSION_STATUS_LABELS[status] || String(status || "");
+    },
+    mergeDashPct(items, pcts) {
+      const pctByKey = new Map((pcts || []).map((item) => [item.key, item.pct]));
+      return (items || []).map((item) => ({
+        ...item,
+        pct: pctByKey.has(item.key) ? pctByKey.get(item.key) : null,
+      }));
+    },
+    dashSegments(items) {
+      const circumference = 2 * Math.PI * 40;
+      let offset = 0;
+      return (items || [])
+        .filter((item) => this.dashAvailable(item.count) && this.dashAvailable(item.pct))
+        .map((item) => {
+          const length = (circumference * item.pct) / 100;
+          const segment = {
+            key: item.key,
+            dash: length + " " + (circumference - length),
+            off: -offset,
+          };
+          offset += length;
+          return segment;
+        });
+    },
+    dashBarHeight(count) {
+      const timeline = this.dashTimeline;
+      if (!timeline || !timeline.max || !count) return "2%";
+      return Math.max(6, Math.min(100, Math.round((count / timeline.max) * 100))) + "%";
+    },
+    dashDate(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      return Number.isFinite(date.getTime()) ? fmtDashDateTime.format(date) : String(value);
+    },
+    dashDay(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      return Number.isFinite(date.getTime()) ? fmtDashDay.format(date) : String(value);
+    },
+    dashBucketLabel(start) {
+      const text = String(start || "");
+      if (!text) return "—";
+      const date = /^\d{4}-\d{2}$/.test(text)
+        ? new Date(text + "-01T00:00:00Z")
+        : /^\d{4}-\d{2}-\d{2}$/.test(text)
+          ? new Date(text + "T00:00:00Z")
+          : new Date(text);
+      if (!Number.isFinite(date.getTime())) return text;
+      if (this.dashGranularity === "month") return fmtDashMonth.format(date);
+      if (this.dashGranularity === "week") return "Semana del " + fmtDashDay.format(date);
+      return fmtDashDay.format(date);
+    },
+    timelineLabel(bucket) {
+      return this.dashBucketLabel(bucket.start) + " · " + this.num(bucket.count) + (bucket.count === 1 ? " registro" : " registros");
+    },
+    timelineTip(bucket) { return this.timelineLabel(bucket); },
+    normalizeDashFilters(filters) {
+      return (filters || [])
+        .filter((filter) => filter && filter.column)
+        .map((filter) => ({
+          column: String(filter.column),
+          op: filter.op || "=",
+          value: filter.value === null || filter.value === undefined ? "" : String(filter.value),
+        }));
+    },
+
     /* ---------- value rendering ---------- */
     num(value) {
       if (typeof value === "number") return fmtInt.format(value);
@@ -1784,6 +2174,7 @@ const app = Vue.createApp({
   mounted() {
     this.loadPrefs();
     this.loadMounts();
+    this.loadDashboard();
     this.mqCompact = window.matchMedia("(max-width:1199.98px)");
     this.mqMobile = window.matchMedia("(max-width:767.98px)");
     this.onBreakpointChange();
@@ -1794,6 +2185,7 @@ const app = Vue.createApp({
   },
   beforeUnmount() {
     this.teardownGraph();
+    if (this.dashAbort) this.dashAbort.abort();
     this.mqCompact.removeEventListener("change", this.onBreakpointChange);
     this.mqMobile.removeEventListener("change", this.onBreakpointChange);
     document.removeEventListener("click", this.onDocClick);

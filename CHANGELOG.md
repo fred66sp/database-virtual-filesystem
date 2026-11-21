@@ -28,6 +28,17 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
   como alternativa accesible al lienzo. El dibujo usa force-graph 1.52.0 (MIT),
   servido por el propio binario; sin CDN, datos de ejemplo ni operaciones de
   escritura.
+- Dashboard del sistema en la raíz del Visual Explorer: sin tabla seleccionada
+  muestra montajes, tablas, registros y montajes accesibles, y el resumen de la
+  memoria ACM —sesiones, observaciones, checkpoints y preferencias— con donuts
+  de distribución y de estado del conocimiento, barras de observaciones por
+  `kind`, últimas sesiones y una serie temporal diaria en UTC agrupable por día,
+  semana o mes. Solo lee con `ls`, `describe`, `find` y `count`, sin endpoint
+  agregado ni escrituras; cada cifra es un recuento real y un fallo se muestra
+  como «No disponible» o «Datos parciales», nunca como cero. Los agregados son
+  navegables: abren la tabla correspondiente con su filtro, y un agregado de
+  varias tablas ofrece un destino por tabla. Sin dependencias nuevas: SVG
+  propio y todo offline.
 - Demo del Visual Explorer en la documentación web: la página principal de
   `docs/web/` explica y enlaza una maqueta interactiva autónoma
   (`docs/web/visual-explorer-demo.html`, copia de la demo de diseño) con árbol
@@ -60,7 +71,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 - DESIGN §3 y §15 documentan el subcomando `serve`: superficie `GET`, servicio
   compartido por petición, activos embebidos, cabeceras y operación local;
   §15 añade la adaptación responsive, la escala tipográfica, el sistema de
-  tooltips y ayuda y el favicon incrustado.
+  tooltips y ayuda y el favicon incrustado, y su subsección «Dashboard del
+  sistema» fija las fuentes de datos, los denominadores, el cálculo de
+  porcentajes, la serie temporal, los límites de lectura y la navegación.
 - Adaptador ACM (`examples/agent-continuity/tools/acm.py`): interfaz unificada
   autodescriptiva. Cada evento AIF resuelve en la invocación que aporta sus
   datos y devuelve su formulario solo si falta un campo obligatorio; `start`
