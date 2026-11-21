@@ -17,6 +17,17 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 - `serve-explorer.sh`: arranque persistente del explorador en el puerto 8893 con
   `start`, `status` y `stop`, pid y registro en `.run/` y arranque idempotente;
   no toca un proceso ajeno que ocupe el puerto.
+- Grafo ACM en el Visual Explorer: una pestaña «Grafo ACM» dibuja la memoria
+  del montaje activo —sesiones, observaciones, checkpoints y preferencias—,
+  detectada por la estructura de sus tablas y no por el nombre del montaje.
+  Cada nodo es una fila real y las aristas solo representan relaciones de
+  sesión y sustituciones; los filtros de tipo, kind, estado, sesión y tema
+  reducen lo visible, y las referencias a filas no cargadas se muestran como
+  destinos sin relación. Carga 200 registros por página en cada tabla, con
+  «Cargar más» hasta 10 páginas por tabla, y ofrece la lista lateral de nodos
+  como alternativa accesible al lienzo. El dibujo usa force-graph 1.52.0 (MIT),
+  servido por el propio binario; sin CDN, datos de ejemplo ni operaciones de
+  escritura.
 - Demo del Visual Explorer en la documentación web: la página principal de
   `docs/web/` explica y enlaza una maqueta interactiva autónoma
   (`docs/web/visual-explorer-demo.html`, copia de la demo de diseño) con árbol

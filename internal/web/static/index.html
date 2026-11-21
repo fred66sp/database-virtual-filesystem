@@ -44,9 +44,9 @@
       </nav>
 
       <div class="search-wrap">
-        <label class="search" :class="{ disabled: !tablePath }" for="q" v-tip="tips.grep">
+        <label class="search" :class="{ disabled: !tablePath || viewMode === 'graph' }" for="q" v-tip="tips.grep">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg>
-          <input id="q" type="search" autocomplete="off" spellcheck="false" v-model="searchText" :disabled="!tablePath" :placeholder="searchPlaceholder" aria-label="Buscar literalmente en la tabla" @keydown.enter.prevent="runGrep">
+          <input id="q" type="search" autocomplete="off" spellcheck="false" v-model="searchText" :disabled="!tablePath || viewMode === 'graph'" :placeholder="searchPlaceholder" aria-label="Buscar literalmente en la tabla" @keydown.enter.prevent="runGrep">
           <kbd aria-hidden="true">/</kbd>
         </label>
         <div class="popover search-pop" v-show="searchOpen" role="dialog" aria-label="Resultados de la búsqueda">
@@ -77,7 +77,7 @@
       </div>
 
       <div class="pop-wrap">
-        <button class="btn" id="filter-btn" type="button" :disabled="!readable" :aria-expanded="filterOpen ? 'true' : 'false'" aria-controls="filter-pop" aria-label="Filtros" v-tip="tips.filters" @click="toggleFilters">
+        <button class="btn" id="filter-btn" type="button" :disabled="!readable || viewMode === 'graph'" :aria-expanded="filterOpen ? 'true' : 'false'" aria-controls="filter-pop" aria-label="Filtros" v-tip="tips.filters" @click="toggleFilters">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z"/></svg>
           <span class="btn-label">Filtros</span>
           <span v-if="filters.length" class="count-badge">{{ filters.length }}</span>
@@ -103,7 +103,7 @@
       </div>
 
       <span class="tool-sep" aria-hidden="true"></span>
-      <button class="btn" id="refresh" type="button" :disabled="!tablePath || isLoading" aria-label="Refrescar" v-tip="tips.refresh" @click="refresh">
+      <button class="btn" id="refresh" type="button" :disabled="!tablePath || isLoading || (viewMode === 'graph' && (graphLoading || graphPreparing || Boolean(graphExpanding)))" aria-label="Refrescar" v-tip="tips.refresh" @click="refresh">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.4"/><path d="M13.6 2.8v4.1h-4.1"/></svg>
         <span class="btn-label">Refrescar</span>
       </button>
@@ -167,7 +167,7 @@
 
       <div class="splitter" id="split-left" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar el árbol" aria-valuemin="168" aria-valuemax="320" :aria-valuenow="treeWidth" @pointerdown="startResize('tree', $event)" @pointermove="moveResize" @pointerup="endResize" @pointercancel="endResize" @keydown="resizeKey('tree', $event)"></div>
 
-      <section class="main" aria-label="Vista tabular">
+      <section class="main" :aria-label="mainLabel">
         <div class="welcome" v-if="!tablePath">
           <h2>db-ai Visual Explorer</h2>
           <p>Selecciona un montaje y después una tabla en el árbol para explorar sus registros.</p>
@@ -176,8 +176,8 @@
 
         <template v-else>
           <div class="table-head">
-            <h1 class="table-title">{{ tableName }}</h1>
-            <div class="table-meta">
+            <h1 class="table-title">{{ viewMode === 'graph' ? 'Grafo ACM' : tableName }}</h1>
+            <div class="table-meta" v-if="viewMode === 'table'">
               <span class="dotsep" aria-hidden="true"></span>
               <span><b>{{ num(count) }}</b> filas</span>
               <span class="cols-meta"><span class="dotsep" aria-hidden="true"></span> <b>{{ columns.length }}</b> columnas</span>
@@ -185,13 +185,24 @@
               <span><b>{{ mountAlias }}</b> · ro</span>
               <span v-if="describe && !navigable" class="warn-tag" v-tip="tips.noPk">sin PK navegable</span>
             </div>
+            <div class="table-meta" v-else>
+              <span class="dotsep" aria-hidden="true"></span>
+              <span><b>{{ num(graphVisible.nodes.length) }}</b> nodos</span>
+              <span><span class="dotsep" aria-hidden="true"></span> <b>{{ num(graphVisible.edges.length) }}</b> aristas</span>
+              <span class="dotsep" aria-hidden="true"></span>
+              <span><b>{{ mountAlias }}</b> · ro</span>
+            </div>
             <div class="table-actions">
-              <button class="btn" id="columns-btn" type="button" :aria-expanded="colMenuOpen ? 'true' : 'false'" aria-controls="col-menu" aria-label="Columnas visibles" v-tip="tips.columns" @click="toggleColMenu">
+              <div class="view-switch" role="group" aria-label="Vista de datos">
+                <button class="view-btn" :class="{ active: viewMode === 'table' }" type="button" :aria-pressed="viewMode === 'table' ? 'true' : 'false'" v-tip="tips.viewTable" @click="setViewMode('table')">Tabla</button>
+                <button class="view-btn" :class="{ active: viewMode === 'graph' }" type="button" :aria-pressed="viewMode === 'graph' ? 'true' : 'false'" v-tip="tips.viewGraph" @click="setViewMode('graph')">Grafo ACM</button>
+              </div>
+              <button class="btn" id="columns-btn" type="button" v-if="viewMode === 'table'" :aria-expanded="colMenuOpen ? 'true' : 'false'" aria-controls="col-menu" aria-label="Columnas visibles" v-tip="tips.columns" @click="toggleColMenu">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10M10 3v10"/></svg>
                 <span class="btn-label">Columnas</span>
               </button>
             </div>
-            <div class="popover col-menu" id="col-menu" v-show="colMenuOpen" role="group" aria-label="Columnas visibles">
+            <div class="popover col-menu" id="col-menu" v-show="colMenuOpen && viewMode === 'table'" role="group" aria-label="Columnas visibles">
               <div class="col-menu-head">Columnas <button type="button" @click="showAllColumns">Mostrar todas</button></div>
               <label v-for="col in columns" :key="col.name" class="col-row">
                 <input type="checkbox" :checked="isColumnVisible(col)" @change="toggleColumn(col, $event)">
@@ -201,7 +212,7 @@
             </div>
           </div>
 
-          <div class="filter-bar" v-if="filters.length || filterError">
+          <div class="filter-bar" v-if="viewMode === 'table' && (filters.length || filterError)">
             <span class="filter-bar-label">Filtros</span>
             <button v-for="(f, i) in filters" :key="i" class="filter-chip" type="button" v-tip="'Quitar el filtro ' + filterExpr(f)" @click="removeFilter(i)">
               {{ filterExpr(f) }} <span aria-hidden="true">×</span>
@@ -210,7 +221,7 @@
             <span v-if="filterError" class="filter-err">{{ filterError.code }} · {{ filterError.message }}</span>
           </div>
 
-          <div class="table-scroll" id="table-scroll">
+          <div class="table-scroll" id="table-scroll" v-show="viewMode === 'table'">
             <div class="err-panel" v-if="error">
               <p class="err-code">{{ error.code }}</p>
               <p>{{ error.message }}</p>
@@ -267,7 +278,7 @@
             </table>
           </div>
 
-          <div class="pagination" v-tip="tips.paging">
+          <div class="pagination" v-show="viewMode === 'table'" v-tip="tips.paging">
             <span class="range">{{ rangeLabel }}</span>
             <span v-if="truncated" class="trunc-note">truncado</span>
             <span class="spacer"></span>
@@ -283,6 +294,148 @@
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
             </button>
           </div>
+
+          <section class="graph-view" v-show="viewMode === 'graph'" aria-labelledby="graph-title">
+            <h2 id="graph-title" class="sr-only">Grafo ACM</h2>
+            <div class="graph-filters">
+              <label class="graph-filter">Tipo
+                <select v-model="graphFilters.type" aria-label="Filtrar por tipo de registro">
+                  <option value="">Todos</option>
+                  <option v-for="kind in graphTableKinds" :key="kind" :value="kind">{{ graphTableLabel(kind) }}</option>
+                </select>
+              </label>
+              <label class="graph-filter">Kind
+                <select v-model="graphFilters.kind" aria-label="Filtrar observaciones por kind">
+                  <option value="">Todos</option>
+                  <option v-for="value in graphKindOptions" :key="value" :value="value">{{ value }}</option>
+                </select>
+              </label>
+              <label class="graph-filter">Estado
+                <select v-model="graphFilters.status" aria-label="Filtrar por estado">
+                  <option value="">Todos</option>
+                  <option v-for="value in graphStatusOptions" :key="value" :value="value">{{ value }}</option>
+                </select>
+              </label>
+              <label class="graph-filter">Sesión
+                <select v-model="graphFilters.session" aria-label="Filtrar por sesión">
+                  <option :value="null">Todas</option>
+                  <option v-for="item in graphSessionOptions" :key="item.id + ':' + item.label" :value="item.id">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="graph-filter">Tema
+                <select v-model="graphFilters.topic" aria-label="Filtrar por tema">
+                  <option value="">Todos</option>
+                  <option v-for="value in graphTopicOptions" :key="value" :value="value">{{ value }}</option>
+                </select>
+              </label>
+              <label class="graph-related" :class="{ disabled: !graphActiveNode }">
+                <input type="checkbox" v-model="graphFilters.related" :disabled="!graphActiveNode">
+                Relacionados con la selección
+              </label>
+              <button class="btn btn-small graph-clear" type="button" :disabled="!graphHasFilters" @click="clearGraphFilters">Limpiar filtros</button>
+              <div class="graph-summary" aria-live="polite">
+                <span>{{ num(graphVisible.nodes.length) }} de {{ num(graphVisible.totalNodes) }} nodos</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ num(graphVisible.edges.length) }} de {{ num(graphVisible.totalEdges) }} aristas</span>
+              </div>
+            </div>
+
+            <div class="graph-stage">
+              <div class="graph-canvas-wrap">
+                <div class="graph-canvas" ref="graphCanvas" aria-hidden="true"></div>
+                <div class="graph-legend" aria-hidden="true">
+                  <span v-for="kind in graphTableKinds" :key="kind"><i class="graph-dot" :class="'gt-' + kind"></i>{{ graphTableLabel(kind) }}</span>
+                  <span><i class="graph-line is-session"></i>sesión</span>
+                  <span><i class="graph-line is-superseded"></i>sustitución</span>
+                </div>
+                <div class="graph-overlay" v-if="graphLoading || graphPreparing" role="status">
+                  <p>{{ graphPreparing ? 'Preparando el dibujo del grafo…' : 'Leyendo la memoria ACM…' }}</p>
+                </div>
+                <div class="graph-overlay" v-else-if="graphError" role="alert">
+                  <div class="err-panel">
+                    <p class="err-code">{{ graphError.code }}</p>
+                    <p>{{ graphError.message }}</p>
+                    <button class="btn" type="button" @click="openGraphView()">Reintentar</button>
+                    <button class="btn" type="button" @click="setViewMode('table')">Volver a la tabla</button>
+                  </div>
+                </div>
+                <div class="graph-overlay" v-else-if="graph && !graph.nodes.length" role="status">
+                  <p>La memoria ACM no tiene registros que mostrar.</p>
+                </div>
+                <div class="graph-overlay" v-else-if="graph && !graphVisible.nodes.length" role="status">
+                  <p>Ningún nodo cumple los filtros del grafo.</p>
+                  <button class="btn btn-small" type="button" @click="clearGraphFilters">Limpiar filtros</button>
+                </div>
+                <div class="graph-controls" v-if="graph && graph.nodes.length" role="group" aria-label="Controles de zoom del grafo">
+                  <button class="graph-ctl" type="button" aria-label="Acercar" v-tip="tips.graphZoomIn" @click="graphZoomBy(1.35)">+</button>
+                  <button class="graph-ctl" type="button" aria-label="Alejar" v-tip="tips.graphZoomOut" @click="graphZoomBy(1 / 1.35)">−</button>
+                  <button class="graph-ctl graph-ctl-wide" type="button" v-tip="tips.graphFit" @click="graphFit()">Ajustar</button>
+                  <button class="graph-ctl graph-ctl-wide" type="button" v-tip="tips.graphReset" @click="graphResetView()">Restablecer</button>
+                  <span class="graph-zoom">{{ graphZoomLabel }}</span>
+                </div>
+              </div>
+
+              <aside class="graph-side" aria-label="Nodos y estado del grafo ACM">
+                <div class="graph-side-head">
+                  <h3>Nodos visibles</h3>
+                  <span class="graph-count">{{ num(graphVisible.nodes.length) }}</span>
+                  <button class="btn btn-small" type="button" :disabled="graphLoading || graphPreparing || Boolean(graphExpanding)" v-tip="tips.graphRefresh" @click="refreshGraph">{{ graphLoading ? 'Actualizando…' : 'Actualizar' }}</button>
+                </div>
+                <div class="graph-list-wrap">
+                  <ul class="graph-list" v-if="graphVisible.nodes.length" aria-label="Nodos visibles del grafo ACM">
+                    <li v-for="node in graphVisible.nodes" :key="node.id">
+                      <button type="button" :class="{ selected: graphActiveNode && graphActiveNode.id === node.id }" :aria-current="graphActiveNode && graphActiveNode.id === node.id ? 'true' : 'false'" @click="selectGraphNode(node)">
+                        <span class="graph-dot" :class="'gt-' + node.table" aria-hidden="true"></span>
+                        <span class="graph-node-label">{{ graphNodeLabel(node) }}</span>
+                        <span class="graph-node-meta">{{ graphTableLabel(node.table) }}<template v-if="node.status"> · {{ node.status }}</template></span>
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="graph-note">Sin nodos visibles. Ajusta los filtros o actualiza el grafo.</p>
+                </div>
+                <details class="graph-block" v-if="graph">
+                  <summary>Tablas cargadas</summary>
+                  <ul class="graph-table-list">
+                    <li v-for="kind in graphTableKinds" :key="kind">
+                      <span class="graph-table-name">{{ graphTableLabel(kind) }}</span>
+                      <span class="graph-table-rows">{{ num(graph.tables[kind].rowCount) }}</span>
+                      <button class="btn btn-small" type="button" v-if="graph.tables[kind].hasMore" :disabled="Boolean(graphExpanding) || graphLoading || graphPreparing" @click="expandGraphTable(kind)">
+                        {{ graphExpanding === kind ? 'Cargando…' : 'Cargar más' }}
+                      </button>
+                      <span v-else-if="graph.tables[kind].error" class="graph-table-error">error</span>
+                      <span v-else-if="graph.tables[kind].truncated" class="graph-table-warn">truncada</span>
+                      <span v-else class="graph-table-complete">completa</span>
+                    </li>
+                  </ul>
+                  <p class="graph-table-error" v-if="graph.tables.sessions.error">{{ graph.tables.sessions.error.code }} · {{ graph.tables.sessions.error.message }}</p>
+                  <p class="graph-table-error" v-if="graph.tables.observations.error">{{ graph.tables.observations.error.code }} · {{ graph.tables.observations.error.message }}</p>
+                  <p class="graph-table-error" v-if="graph.tables.checkpoints.error">{{ graph.tables.checkpoints.error.code }} · {{ graph.tables.checkpoints.error.message }}</p>
+                  <p class="graph-table-error" v-if="graph.tables.preferences.error">{{ graph.tables.preferences.error.code }} · {{ graph.tables.preferences.error.message }}</p>
+                  <p class="graph-table-error" v-if="graphExpansionError">{{ graphExpansionError.code }} · {{ graphExpansionError.message }}</p>
+                </details>
+                <details class="graph-block" v-if="graph && graph.unresolved.length">
+                  <summary>{{ num(graph.counts.unresolvedTargets) }} destinos sin relación ({{ num(graph.counts.unresolvedReferences) }})</summary>
+                  <p class="graph-note">Referencias a registros que no están en las páginas cargadas. «Pendiente» puede resolverse cargando más; «no existe» indica que la tabla de destino está completa.</p>
+                  <ul class="graph-unresolved">
+                    <li v-for="item in graph.unresolved" :key="item.table + ':' + item.id">
+                      <span>{{ graphTableLabel(item.table) }} {{ shortId(item.id) }}</span>
+                      <span class="graph-unresolved-meta">{{ item.reason === 'pending' ? 'pendiente' : 'no existe' }} · {{ num(item.count) }} referencia{{ item.count === 1 ? '' : 's' }}</span>
+                    </li>
+                  </ul>
+                </details>
+              </aside>
+            </div>
+
+            <div class="graph-foot">
+              <span v-if="graphStale" class="graph-warn">El grafo está desactualizado respecto a la tabla; pulsa «Actualizar» para releerlo.</span>
+              <span v-if="graph && !graph.complete" class="graph-warn">Carga parcial: alguna tabla no está completa.</span>
+              <span v-for="(warning, i) in (graph ? graph.warnings : [])" :key="i" class="graph-warn">{{ warning }}</span>
+              <span v-if="graphNotice" class="graph-warn">{{ graphNotice }}</span>
+              <span class="graph-foot-meta" v-if="graph">Alias {{ graph.alias }} · {{ num(graph.limits.pageSize) }} registros por tabla · máx. {{ num(graph.limits.maxPagesPerTable) }} páginas</span>
+              <span class="spacer"></span>
+              <span class="graph-foot-meta">Las aristas discontinuas ámbar son sustituciones.</span>
+            </div>
+          </section>
         </template>
       </section>
 
@@ -301,7 +454,7 @@
         </div>
         <div class="insp-body" v-show="inspOpen">
           <p v-if="inspectorError" class="err-panel">{{ inspectorError.code }} · {{ inspectorError.message }}</p>
-          <p v-else-if="tablePath && describe && !navigable" class="insp-empty">Esta tabla no expone una clave primaria navegable: las filas se pueden leer, pero no abrir por ruta.</p>
+          <p v-else-if="tablePath && describe && !navigable && !selectedPath" class="insp-empty">Esta tabla no expone una clave primaria navegable: las filas se pueden leer, pero no abrir por ruta.</p>
           <p v-else-if="!selectedPath" class="insp-empty">Selecciona una fila de la tabla para inspeccionar sus campos.</p>
           <p v-else-if="inspectorLoading" class="insp-loading">Cargando registro…</p>
           <template v-else-if="selectedFields">
@@ -309,6 +462,12 @@
               <span>{{ selectedPath }}</span>
               <button class="copy-field" type="button" v-tip="tips.copyPath" aria-label="Copiar la ruta del registro" @click="copyText(selectedPath, 'Ruta copiada')">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
+              </button>
+            </div>
+            <div class="insp-actions">
+              <button class="btn btn-small graph-rel-btn" type="button" v-tip="tips.relations" @click="showRelations">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="8" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="12" cy="12" r="2"/><path d="M5.8 7.1l4.4-2.2M5.8 8.9l4.4 2.2"/></svg>
+                <span>Ver relaciones</span>
               </button>
             </div>
             <div v-for="col in inspectorColumns" :key="col.name" class="field" :class="{ 'is-hit': highlightField === col.name }">
@@ -348,8 +507,9 @@
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3h4l1.5 2H14v8H2z"/></svg>
         <span>{{ displayPath }}</span>
       </span>
-      <span v-if="tablePath" class="status-item status-rows">{{ rangeLabel }} filas</span>
-      <span v-if="tablePath" class="status-item status-cols">{{ visibleColumns.length }}/{{ columns.length }} columnas</span>
+      <span v-if="tablePath && viewMode === 'table'" class="status-item status-rows">{{ rangeLabel }} filas</span>
+      <span v-if="tablePath && viewMode === 'table'" class="status-item status-cols">{{ visibleColumns.length }}/{{ columns.length }} columnas</span>
+      <span v-if="tablePath && viewMode === 'graph'" class="status-item status-graph">{{ num(graphVisible.nodes.length) }} nodos · {{ num(graphVisible.edges.length) }} aristas</span>
       <span v-if="tablePath" class="status-item"><span class="mode-tag">{{ mountAlias }} · ro</span></span>
       <span v-if="tablePath && !navigable" class="status-item status-warn" v-tip="tips.noPk">sin filas direccionables</span>
       <span class="status-item" v-tip="tips.readOnly">
@@ -386,6 +546,10 @@
         <p>La búsqueda es literal y distingue mayúsculas. Los filtros combinan columna, operador y valor con AND; el valor se interpreta como JSON y, si no lo es, como texto.</p>
         <h3>Inspector</h3>
         <p>Muestra el registro seleccionado con el tipo y el valor completo de cada campo. Puedes copiar la ruta o cada valor.</p>
+        <h3>Grafo ACM</h3>
+        <p>La pestaña «Grafo ACM» dibuja las sesiones, observaciones, checkpoints y preferencias de la memoria montada. La detección es por estructura de las tablas, no por el nombre del montaje. Selecciona un nodo de la lista accesible o del lienzo para cargar su registro real en el inspector. Desde el inspector, «Ver relaciones» abre el grafo con ese registro y sus vecinos directos.</p>
+        <p>Los filtros de tipo, kind, estado, sesión y tema reducen nodos y aristas; el contador indica cuántos quedan. «Relacionados con la selección» deja el nodo elegido y sus vecinos. Las aristas continuas son relaciones de sesión y las discontinuas ámbar son sustituciones. «Actualizar» relee la memoria y restaura hasta el mismo número de páginas ya cargadas por tabla (máximo 10); las observaciones se ordenan por fecha descendente y, en empate, por id descendente, para que las nuevas figuren en la primera página. «Cargar más» añade la página siguiente de una tabla. Si una referencia apunta a una fila no cargada, aparece como destino sin relación.</p>
+        <p class="hint">El dibujo usa force-graph 1.52.0 (MIT, Vasco Asturiano), servido desde este binario; no se carga nada desde una CDN.</p>
         <h3>Conceptos</h3>
         <dl>
           <dt>ETag</dt><dd>Identificador del contenido de una fila en una versión concreta.</dd>
