@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzBmMTQxYyIvPgogIDxlbGxpcHNlIGN4PSIxNiIgY3k9IjguNiIgcng9IjgiIHJ5PSIzLjIiIGZpbGw9IiM3YWE3ZmYiLz4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiM3YWE3ZmYiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPgogICAgPHBhdGggZD0iTTggOC42djcuMWMwIDEuNzcgMy41OCAzLjIgOCAzLjJzOC0xLjQzIDgtMy4yVjguNiIvPgogICAgPHBhdGggZD0iTTggMTUuN3Y3LjFjMCAxLjc3IDMuNTggMy4yIDggMy4yczgtMS40MyA4LTMuMnYtNy4xIi8+CiAgPC9nPgo8L3N2Zz4K">
 <title>db-ai Visual Explorer</title>
 <link rel="stylesheet" href="/styles.css">
 </head>
@@ -12,18 +13,29 @@
   <div class="window">
 
     <header class="titlebar">
-      <a class="brand" href="/" title="Raíz de montajes" @click.prevent="goRoot">
+      <a class="brand" href="/" v-tip="'Volver a la raíz de montajes'" @click.prevent="goRoot">
         <span class="logo" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.6" rx="5" ry="1.9"/><path d="M3 3.6v8.8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9V3.6"/><path d="M3 8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9"/></svg></span>
         <strong>db-ai Visual Explorer</strong>
       </a>
-      <span class="pill">solo lectura</span>
+      <span class="pill" v-tip="tips.readOnly">solo lectura</span>
       <span class="spacer"></span>
+      <button class="btn drawer-btn" id="btn-tree" type="button" aria-controls="tree" :aria-expanded="drawer === 'tree' ? 'true' : 'false'" v-tip="tips.tree" @click="toggleDrawer('tree', $event)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12"/></svg>
+        <span>Montajes</span>
+      </button>
+      <button class="btn drawer-btn" id="btn-insp" type="button" aria-controls="inspector" :aria-expanded="drawer === 'insp' ? 'true' : 'false'" v-tip="tips.inspector" @click="toggleDrawer('insp', $event)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M10 3v10"/></svg>
+        <span>Inspector</span>
+      </button>
       <span class="meta" v-if="mounts.length">{{ mounts.length }} {{ mounts.length === 1 ? 'montaje registrado' : 'montajes registrados' }}</span>
+      <button class="btn btn-icon help-btn" id="btn-help" type="button" aria-controls="help-panel" aria-haspopup="dialog" :aria-expanded="helpOpen ? 'true' : 'false'" aria-label="Ayuda" v-tip="tips.help" @click="openHelp">
+        <span aria-hidden="true">?</span>
+      </button>
     </header>
 
     <div class="toolbar">
-      <nav class="crumbs" aria-label="Ruta virtual">
-        <button class="crumb" :class="{ current: !tablePath }" title="Raíz" @click="goRoot">/</button>
+      <nav class="crumbs" aria-label="Ruta virtual" v-tip="tips.path">
+        <button class="crumb" :class="{ current: !tablePath }" aria-label="Ir a la raíz" @click="goRoot">/</button>
         <button v-if="mountAlias" class="crumb" @click="goMount">{{ mountAlias }}</button>
         <span class="crumb-sep" aria-hidden="true" v-if="tablePath">/</span>
         <button v-if="tablePath" class="crumb" :class="{ current: !selectedPath }" @click="goTable">{{ tableName }}</button>
@@ -32,7 +44,7 @@
       </nav>
 
       <div class="search-wrap">
-        <label class="search" :class="{ disabled: !tablePath }" for="q">
+        <label class="search" :class="{ disabled: !tablePath }" for="q" v-tip="tips.grep">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg>
           <input id="q" type="search" autocomplete="off" spellcheck="false" v-model="searchText" :disabled="!tablePath" :placeholder="searchPlaceholder" aria-label="Buscar literalmente en la tabla" @keydown.enter.prevent="runGrep">
           <kbd aria-hidden="true">/</kbd>
@@ -65,7 +77,7 @@
       </div>
 
       <div class="pop-wrap">
-        <button class="btn" id="filter-btn" type="button" :disabled="!readable" :aria-expanded="filterOpen ? 'true' : 'false'" aria-controls="filter-pop" title="Filtros por columna" @click="toggleFilters">
+        <button class="btn" id="filter-btn" type="button" :disabled="!readable" :aria-expanded="filterOpen ? 'true' : 'false'" aria-controls="filter-pop" aria-label="Filtros" v-tip="tips.filters" @click="toggleFilters">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z"/></svg>
           <span class="btn-label">Filtros</span>
           <span v-if="filters.length" class="count-badge">{{ filters.length }}</span>
@@ -91,11 +103,11 @@
       </div>
 
       <span class="tool-sep" aria-hidden="true"></span>
-      <button class="btn" id="refresh" type="button" :disabled="!tablePath || isLoading" title="Refrescar la vista actual" @click="refresh">
+      <button class="btn" id="refresh" type="button" :disabled="!tablePath || isLoading" aria-label="Refrescar" v-tip="tips.refresh" @click="refresh">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.4"/><path d="M13.6 2.8v4.1h-4.1"/></svg>
         <span class="btn-label">Refrescar</span>
       </button>
-      <button class="btn" id="copy-path" type="button" :disabled="!tablePath" title="Copiar la ruta virtual seleccionada" @click="copyPath">
+      <button class="btn" id="copy-path" type="button" :disabled="!tablePath" aria-label="Copiar ruta" v-tip="tips.copyPath" @click="copyPath">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
         <span class="btn-label">Copiar ruta</span>
       </button>
@@ -103,8 +115,12 @@
 
     <div class="workspace" :style="workspaceStyle">
 
-      <nav class="tree" aria-label="Montajes y tablas">
-        <div class="tree-head"><span class="label">Montajes</span><span class="count">{{ mounts.length }}</span></div>
+      <nav class="tree" ref="tree" id="tree" tabindex="-1" :class="{ open: drawer === 'tree' }" aria-label="Montajes y tablas">
+        <div class="tree-head"><span class="label" v-tip="tips.mounts">Montajes</span><span class="count">{{ mounts.length }}</span>
+          <button class="drawer-close" type="button" aria-label="Cerrar el panel de montajes" @click="closeDrawer">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
         <div class="tree-scroll">
           <p v-if="rootLoading" class="tree-note">Cargando…</p>
           <p v-if="treeError" class="tree-error">{{ treeError.code }} · {{ treeError.message }}</p>
@@ -167,12 +183,12 @@
               <span class="cols-meta"><span class="dotsep" aria-hidden="true"></span> <b>{{ columns.length }}</b> columnas</span>
               <span class="dotsep" aria-hidden="true"></span>
               <span><b>{{ mountAlias }}</b> · ro</span>
-              <span v-if="describe && !navigable" class="warn-tag">sin PK navegable</span>
+              <span v-if="describe && !navigable" class="warn-tag" v-tip="tips.noPk">sin PK navegable</span>
             </div>
             <div class="table-actions">
-              <button class="btn" id="columns-btn" type="button" :aria-expanded="colMenuOpen ? 'true' : 'false'" aria-controls="col-menu" title="Elegir columnas visibles" @click="toggleColMenu">
+              <button class="btn" id="columns-btn" type="button" :aria-expanded="colMenuOpen ? 'true' : 'false'" aria-controls="col-menu" aria-label="Columnas visibles" v-tip="tips.columns" @click="toggleColMenu">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10M10 3v10"/></svg>
-                <span>Columnas</span>
+                <span class="btn-label">Columnas</span>
               </button>
             </div>
             <div class="popover col-menu" id="col-menu" v-show="colMenuOpen" role="group" aria-label="Columnas visibles">
@@ -187,7 +203,7 @@
 
           <div class="filter-bar" v-if="filters.length || filterError">
             <span class="filter-bar-label">Filtros</span>
-            <button v-for="(f, i) in filters" :key="i" class="filter-chip" type="button" :title="'Quitar ' + filterExpr(f)" @click="removeFilter(i)">
+            <button v-for="(f, i) in filters" :key="i" class="filter-chip" type="button" v-tip="'Quitar el filtro ' + filterExpr(f)" @click="removeFilter(i)">
               {{ filterExpr(f) }} <span aria-hidden="true">×</span>
             </button>
             <button class="btn btn-small" type="button" @click="clearFilters">Limpiar</button>
@@ -205,7 +221,7 @@
               <thead>
                 <tr>
                   <th v-for="col in visibleColumns" :key="col.name" scope="col" :class="{ num: /INT|REAL|FLOA|DOUB|NUMERIC|DEC/i.test(col.declared_type || '') }" :style="{ width: colWidthPx(col) + 'px' }" :aria-sort="ariaSort(col)">
-                    <button class="th-btn" type="button" :title="'Ordenar por ' + col.name" @click="sortBy(col)">
+                    <button class="th-btn" type="button" v-tip="tips.sort" @click="sortBy(col)">
                       <span>{{ col.name }}</span>
                       <span class="sort" aria-hidden="true">{{ sortMark(col) }}</span>
                     </button>
@@ -225,22 +241,23 @@
                       <button v-if="filters.length" class="btn btn-small" type="button" @click="clearFilters">Limpiar filtros</button>
                     </td>
                   </tr>
-                  <tr v-for="(row, index) in rows" :key="row.path + ':' + index" :class="{ 'is-selected': navigable && selectedPath === row.path, 'is-static': !navigable }" :aria-current="navigable && selectedPath === row.path ? 'true' : 'false'" :tabindex="navigable ? 0 : -1" @click="selectRow(row)" @keydown.enter.prevent="selectRow(row)">
+                  <tr v-for="(row, index) in rows" :key="row.path + ':' + index" :class="{ 'is-selected': navigable && selectedPath === row.path, 'is-static': !navigable }" :aria-current="navigable && selectedPath === row.path ? 'true' : 'false'" :tabindex="navigable ? 0 : -1" @click="selectRow(row, '', $event)" @keydown.enter.prevent="selectRow(row, '', $event)">
                     <td v-for="col in visibleColumns" :key="col.name" :class="{ num: /INT|REAL|FLOA|DOUB|NUMERIC|DEC/i.test(col.declared_type || '') }" :title="cellTitle(cell(row, col))">
                       <template v-if="cell(row, col)">
-                        <span v-if="cell(row, col).kind === 'null'" class="v-null" title="NULL">∅</span>
-                        <span v-else-if="cell(row, col).kind === 'blob'" class="v-blob" :title="'BLOB de ' + blobBytes(cell(row, col).data) + ' bytes'">
+                        <span v-if="cell(row, col).kind === 'null'" class="v-null" v-tip="tips.nullValue">∅</span>
+                        <span v-else-if="cell(row, col).kind === 'blob'" class="v-blob" v-tip="tips.blob">
                           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
                           BLOB {{ blobBytes(cell(row, col).data) }} B
                         </span>
                         <span v-else-if="cell(row, col).kind === 'integer' && isBoolColumn(col)" class="v-bool" :class="cell(row, col).data === '0' ? 'v-false' : 'v-true'">{{ cell(row, col).data === '0' ? 'false' : 'true' }}</span>
                         <span v-else-if="cell(row, col).kind === 'integer'" class="v-num">{{ num(cell(row, col).data) }}</span>
                         <span v-else-if="cell(row, col).kind === 'real'" class="v-num">{{ real(cell(row, col).data) }}</span>
+                        <span v-else-if="isTagCell(col, cell(row, col))" class="cell-badge" :class="tagTone(col, cell(row, col))">{{ cell(row, col).data }}</span>
                         <span v-else-if="jsonTokensOf(cell(row, col))" class="v-json"><span v-for="(tok, i) in jsonTokensOf(cell(row, col))" :key="i" :class="tok.cls">{{ tok.text }}</span></span>
                         <span v-else class="v-text">{{ cell(row, col).data }}</span>
                       </template>
-                      <span v-else class="v-null" title="NULL">∅</span>
-                      <button class="cell-copy" type="button" :aria-label="'Copiar valor de ' + col.name" title="Copiar valor" @click.stop="copyCell(cell(row, col))">
+                      <span v-else class="v-null" v-tip="tips.nullValue">∅</span>
+                      <button class="cell-copy" type="button" :aria-label="'Copiar valor de ' + col.name" @click.stop="copyCell(cell(row, col))">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
                       </button>
                     </td>
@@ -250,7 +267,7 @@
             </table>
           </div>
 
-          <div class="pagination">
+          <div class="pagination" v-tip="tips.paging">
             <span class="range">{{ rangeLabel }}</span>
             <span v-if="truncated" class="trunc-note">truncado</span>
             <span class="spacer"></span>
@@ -259,10 +276,10 @@
                 <option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option>
               </select>
             </span>
-            <button class="pg-btn" type="button" :disabled="!canPrev" aria-label="Página anterior" title="Página anterior" @click="prevPage">
+            <button class="pg-btn" type="button" :disabled="!canPrev" aria-label="Página anterior" @click="prevPage">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
             </button>
-            <button class="pg-btn" type="button" :disabled="!canNext" aria-label="Página siguiente" title="Página siguiente" @click="nextPage">
+            <button class="pg-btn" type="button" :disabled="!canNext" aria-label="Página siguiente" @click="nextPage">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
             </button>
           </div>
@@ -271,14 +288,14 @@
 
       <div class="splitter" id="split-right" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar el inspector" aria-valuemin="248" aria-valuemax="460" :aria-valuenow="inspWidth" @pointerdown="startResize('insp', $event)" @pointermove="moveResize" @pointerup="endResize" @pointercancel="endResize" @keydown="resizeKey('insp', $event)"></div>
 
-      <aside class="inspector" aria-label="Inspector del registro">
+      <aside class="inspector" ref="insp" id="inspector" tabindex="-1" :class="{ open: drawer === 'insp' }" aria-label="Inspector del registro">
         <div class="insp-head" v-show="inspOpen">
-          <span class="label">Inspector</span>
+          <span class="label" v-tip="tips.inspector">Inspector</span>
           <span class="pk">{{ shortKey }}</span>
-          <button class="btn btn-icon" type="button" v-if="selectedPath" title="Copiar la ruta del registro" aria-label="Copiar la ruta del registro" @click="copyText(selectedPath, 'Ruta copiada')">
+          <button class="btn btn-icon" type="button" v-if="selectedPath" v-tip="tips.copyPath" aria-label="Copiar la ruta del registro" @click="copyText(selectedPath, 'Ruta copiada')">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
           </button>
-          <button class="btn btn-icon" type="button" aria-expanded="true" title="Plegar el inspector" aria-label="Plegar el inspector" @click="setInspector(false)">
+          <button class="btn btn-icon" type="button" aria-expanded="true" aria-label="Plegar el inspector" @click="collapseInspector">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
           </button>
         </div>
@@ -290,7 +307,7 @@
           <template v-else-if="selectedFields">
             <div class="insp-path">
               <span>{{ selectedPath }}</span>
-              <button class="copy-field" type="button" title="Copiar la ruta" aria-label="Copiar la ruta del registro" @click="copyText(selectedPath, 'Ruta copiada')">
+              <button class="copy-field" type="button" v-tip="tips.copyPath" aria-label="Copiar la ruta del registro" @click="copyText(selectedPath, 'Ruta copiada')">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
               </button>
             </div>
@@ -298,27 +315,28 @@
               <div class="field-top">
                 <span class="field-name">{{ col.name }}</span>
                 <span class="type-pill">{{ col.declared_type || 'sin tipo' }}</span>
-                <span class="kind-pill" v-if="inspectorValue(col.name)">{{ inspectorValue(col.name).kind }}</span>
-                <button class="copy-field" type="button" :aria-label="'Copiar ' + col.name" title="Copiar valor" @click="copyFieldValue(col)">
+                <span :class="['kind-pill','kind-' + inspectorValue(col.name).kind]" v-if="inspectorValue(col.name)">{{ inspectorValue(col.name).kind }}</span>
+                <button class="copy-field" type="button" :aria-label="'Copiar ' + col.name" @click="copyFieldValue(col)">
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
                 </button>
               </div>
               <div class="field-value">
-                <span v-if="!inspectorValue(col.name) || inspectorValue(col.name).kind === 'null'" class="v-null">∅ NULL</span>
-                <span v-else-if="inspectorValue(col.name).kind === 'blob'" class="v-blob" :title="'BLOB de ' + blobBytes(inspectorValue(col.name).data) + ' bytes'">
+                <span v-if="!inspectorValue(col.name) || inspectorValue(col.name).kind === 'null'" class="v-null" v-tip="tips.nullValue">∅ NULL</span>
+                <span v-else-if="inspectorValue(col.name).kind === 'blob'" class="v-blob" v-tip="tips.blob">
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
                   BLOB {{ blobBytes(inspectorValue(col.name).data) }} B
                 </span>
                 <span v-else-if="inspectorValue(col.name).kind === 'integer' && isBoolColumn(col)" class="v-bool" :class="inspectorValue(col.name).data === '0' ? 'v-false' : 'v-true'">{{ inspectorValue(col.name).data === '0' ? 'false' : 'true' }}</span>
                 <span v-else-if="inspectorValue(col.name).kind === 'integer'" class="v-num">{{ num(inspectorValue(col.name).data) }}</span>
                 <span v-else-if="inspectorValue(col.name).kind === 'real'" class="v-num">{{ real(inspectorValue(col.name).data) }}</span>
+                <span v-else-if="isTagCell(col, inspectorValue(col.name))" class="cell-badge" :class="tagTone(col, inspectorValue(col.name))">{{ inspectorValue(col.name).data }}</span>
                 <pre v-else-if="jsonTokensOf(inspectorValue(col.name))" class="json-block"><span v-for="(tok, i) in jsonTokensOf(inspectorValue(col.name))" :key="i" :class="tok.cls">{{ tok.text }}</span></pre>
                 <span v-else class="fv">{{ inspectorValue(col.name).data }}</span>
               </div>
             </div>
           </template>
         </div>
-        <button class="rail-open" type="button" v-show="!inspOpen" title="Desplegar el inspector" @click="setInspector(true)">
+        <button class="rail-open" type="button" v-show="!inspOpen" aria-label="Abrir el inspector" @click="setInspector(true)">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
           <span class="rail-vert">Inspector</span>
         </button>
@@ -333,8 +351,8 @@
       <span v-if="tablePath" class="status-item status-rows">{{ rangeLabel }} filas</span>
       <span v-if="tablePath" class="status-item status-cols">{{ visibleColumns.length }}/{{ columns.length }} columnas</span>
       <span v-if="tablePath" class="status-item"><span class="mode-tag">{{ mountAlias }} · ro</span></span>
-      <span v-if="tablePath && !navigable" class="status-item status-warn" title="Las filas no se pueden direccionar por ruta">sin filas direccionables</span>
-      <span class="status-item">
+      <span v-if="tablePath && !navigable" class="status-item status-warn" v-tip="tips.noPk">sin filas direccionables</span>
+      <span class="status-item" v-tip="tips.readOnly">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="6.5" rx="1"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>
         solo lectura
       </span>
@@ -343,13 +361,49 @@
       <span v-if="etagNotice" class="status-item status-warn">{{ etagNotice }}</span>
       <span class="spacer"></span>
       <span class="offline">sin red externa</span>
-      <span v-if="lastETag" class="etag" :title="'ETag de la primera fila visible: ' + lastETag">ETag {{ lastETag.slice(0, 18) }}…</span>
+      <span v-if="lastETag" class="etag" tabindex="0" v-tip="etagTip">ETag {{ lastETag.slice(0, 18) }}…</span>
     </footer>
 
   </div>
 
+  <div class="drawer-backdrop" v-if="drawer" aria-hidden="true" @click="closeDrawer"></div>
+
+  <div class="help-layer" v-if="helpOpen">
+    <div class="help-backdrop" @click="closeHelp"></div>
+    <section class="help-panel" id="help-panel" ref="help" role="dialog" aria-modal="true" aria-labelledby="help-title" tabindex="-1">
+      <header class="help-head">
+        <h2 id="help-title">Cómo usar el explorador</h2>
+        <button class="btn btn-icon help-close" type="button" aria-label="Cerrar la ayuda" @click="closeHelp">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </header>
+      <div class="help-body">
+        <h3>Cómo empezar</h3>
+        <p>Elige un montaje y después una tabla en el panel de montajes. Las filas aparecen en la tabla; selecciona una para ver todos sus campos en el inspector.</p>
+        <h3>Navegación básica</h3>
+        <p>La ruta virtual de la cabecera te devuelve a cualquier nivel anterior. Pulsa <kbd>/</kbd> para ir a la búsqueda y <kbd>Escape</kbd> para cerrar la ayuda, un panel o un menú. En pantallas estrechas, Montajes e Inspector se abren como paneles superpuestos desde la cabecera.</p>
+        <h3>Búsqueda y filtros</h3>
+        <p>La búsqueda es literal y distingue mayúsculas. Los filtros combinan columna, operador y valor con AND; el valor se interpreta como JSON y, si no lo es, como texto.</p>
+        <h3>Inspector</h3>
+        <p>Muestra el registro seleccionado con el tipo y el valor completo de cada campo. Puedes copiar la ruta o cada valor.</p>
+        <h3>Conceptos</h3>
+        <dl>
+          <dt>ETag</dt><dd>Identificador del contenido de una fila en una versión concreta.</dd>
+          <dt>NULL</dt><dd>Valor ausente o desconocido; no es una cadena vacía ni un cero.</dd>
+          <dt>BLOB</dt><dd>Datos binarios; se muestran con su tamaño y se copian en base64.</dd>
+          <dt>Tabla sin PK navegable</dt><dd>Se puede consultar, pero sus filas no se abren por ruta y la paginación se queda en la primera página.</dd>
+          <dt>Cursor</dt><dd>Marca la posición de la página siguiente. Está firmado; los cambios concurrentes pueden alterar el recorrido.</dd>
+        </dl>
+        <h3>Solo lectura</h3>
+        <p>Esta interfaz no modifica datos: solo consulta y explora.</p>
+      </div>
+    </section>
+  </div>
+
   <div class="toast" :class="{ show: Boolean(toast) }" role="status" aria-live="polite">{{ toast }}</div>
 </div>
+
+<div id="dbai-tip" class="dbai-tip" role="tooltip" aria-hidden="true"></div>
 
 <script src="/vendor/vue.global.prod.js"></script>
 <script src="/app.js"></script>

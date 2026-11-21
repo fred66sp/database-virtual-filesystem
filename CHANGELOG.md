@@ -22,11 +22,34 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
   (`docs/web/visual-explorer-demo.html`, copia de la demo de diseño) con árbol
   de montajes, vista tabular, inspector y vista hexadecimal sobre datos de
   ejemplo; sin recursos externos ni peticiones reales.
+- Tooltips explicativos en español en toda la interfaz y ayuda global con el
+  botón `?`: qué es un montaje, una ruta virtual, una clave primaria, un ETag,
+  NULL o un BLOB, cómo se busca y se filtra y por qué la superficie es de solo
+  lectura. Se muestran al pasar el ratón, al enfocar o al tocar, se ocultan con
+  `Escape` y no bloquean la interacción.
+- Favicon propio en la pestaña del navegador: un SVG incrustado en la página,
+  sin petición adicional ni error 404 por `/favicon.ico`.
+- En la tabla y en el inspector, los valores de las columnas `kind` y `status`
+  se muestran como etiquetas tintadas con un tono estable por valor, sin cambiar
+  el texto, la copia ni el significado del dato; los estados usan tonos
+  convencionales (activo verde, pendiente ámbar, bloqueado rojo, retirado gris).
 
 ### Modificado
 
+- El Visual Explorer se adapta a escritorio, tablet y móvil: por debajo de
+  1200 px el árbol y el inspector se abren como paneles superpuestos con cierre
+  por botón, `Escape` o fondo, foco que entra y vuelve a su origen y navegación
+  por teclado; en pantallas estrechas el toolbar se pliega en dos filas, la
+  tabla conserva su desplazamiento interno y los controles táctiles son más
+  grandes y con la copia de celda siempre visible.
+- Tipografía más legible con una escala centralizada: cuerpo de 15 px, tabla,
+  controles y árbol de 14 px, textos secundarios de 12 a 13 px y títulos de
+  22 px, sin texto funcional por debajo de 12 px; se mantienen Fira Sans e
+  Inconsolata.
 - DESIGN §3 y §15 documentan el subcomando `serve`: superficie `GET`, servicio
-  compartido por petición, activos embebidos, cabeceras y operación local.
+  compartido por petición, activos embebidos, cabeceras y operación local;
+  §15 añade la adaptación responsive, la escala tipográfica, el sistema de
+  tooltips y ayuda y el favicon incrustado.
 - Adaptador ACM (`examples/agent-continuity/tools/acm.py`): interfaz unificada
   autodescriptiva. Cada evento AIF resuelve en la invocación que aporta sus
   datos y devuelve su formulario solo si falta un campo obligatorio; `start`
