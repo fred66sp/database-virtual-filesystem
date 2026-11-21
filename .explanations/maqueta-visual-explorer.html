@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>db-ai Visual Explorer · maqueta de diseño</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a0d12; --surface:#0f141c; --sunken:#0b0f15; --panel:#0d1219; --raised:#141a24;
+  --hover:#121a26; --selected:#16202f; --backdrop:#05070a;
+  --line:#232c3a; --line-soft:#1a2230; --line-strong:#31405a;
+  --text:#e8ecf3; --muted:#a3adbe; --text-dim:#8b96a8; --faint:#7f8a9c;
+  --accent:#7aa7ff; --accent-2:#93c5fd; --accent-3:#7fd6e8;
+  --accent-soft:rgba(122,167,255,.12);
+  --ok:#6fdc9a; --ok-mark:#6fdc9a; --warn:#e8c07a; --warn-mark:#e8c07a; --err:#ff8a8a; --err-mark:#ff8a8a;
+  --violet:#c0a6ff;
+  --font:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Inconsolata",ui-monospace,"SFMono-Regular","Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:var(--font);
+  --border:var(--line); --border-strong:var(--line-strong);
+  --code-bg:var(--sunken); --code-text:var(--text); --code-border:var(--line);
+  --radius:8px; --radius-sm:5px;
+  --shadow:0 28px 80px -34px rgba(0,0,0,.95);
+  --tree-w:200px; --insp-w:288px;
+  --sp-1:8px; --sp-2:12px; --sp-3:16px; --sp-4:24px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+html{font-size:16px}
+body{
+  margin:0;background:var(--backdrop);color:var(--text);
+  font:400 13px/1.45 var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  overflow:hidden;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+::selection{background:rgba(122,167,255,.28)}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;padding:0}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#26303f;border:2px solid var(--bg);border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:#33415a}
+*{scrollbar-color:#26303f transparent;scrollbar-width:thin}
+
+/* ---------- ventana ---------- */
+.frame{height:100vh;height:100dvh;padding:10px;display:flex}
+.window{
+  flex:1;min-width:0;display:grid;grid-template-rows:30px 46px minmax(0,1fr) 27px;
+  background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.03);
+}
+.titlebar{display:flex;align-items:center;gap:10px;min-width:0;padding:0 12px;background:var(--sunken);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;min-width:0;color:var(--text);font-weight:600}
+.brand:hover{text-decoration:none}
+.logo{display:grid;place-items:center;width:20px;height:20px;border-radius:5px;background:var(--accent-soft);border:1px solid rgba(122,167,255,.28);color:var(--accent);flex:none}
+.logo svg{width:12px;height:12px}
+.brand strong{font-size:12.5px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.pill{display:inline-flex;align-items:center;height:16px;padding:0 5px;border:1px solid var(--line-strong);border-radius:3px;color:var(--text-dim);font:600 9px/1 var(--font);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.titlebar .spacer{flex:1}
+.titlebar .meta{font-size:11px;color:var(--text-dim);white-space:nowrap}
+.tlink{display:inline-flex;align-items:center;height:22px;padding:0 7px;background:none;border:1px solid transparent;border-radius:4px;color:var(--text-dim);font:500 11.5px var(--font);white-space:nowrap}
+.tlink:hover{color:var(--text);background:var(--hover);border-color:var(--line);text-decoration:none}
+
+/* ---------- barra de herramientas ---------- */
+.toolbar{display:flex;align-items:center;gap:9px;min-width:0;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+.crumbs{display:flex;align-items:center;gap:1px;min-width:170px;overflow:hidden;flex:0 1 auto}
+.crumb{font:500 12.5px/1.4 var(--mono);color:var(--text-dim);background:none;border:0;border-radius:4px;padding:3px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.crumb:hover{color:var(--text);background:var(--hover)}
+.crumb.current{color:var(--text)}
+.crumbs .crumb:first-child{color:var(--muted)}
+.crumb-sep{font:400 12px var(--mono);color:var(--line-strong);padding:0 1px}
+.search{display:flex;align-items:center;gap:6px;height:28px;min-width:120px;flex:1 1 200px;max-width:340px;margin-left:auto;padding:0 8px;background:var(--sunken);border:1px solid var(--line);border-radius:6px}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.search svg{width:13px;height:13px;color:var(--text-dim);flex:none}
+.search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font:400 12px var(--font)}
+.search input::placeholder{color:var(--text-dim)}
+.search kbd{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 3px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--text-dim);font:400 10px/1 var(--mono)}
+.filter{position:relative;display:flex;align-items:center;gap:4px;height:28px;padding:0 6px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;color:var(--text-dim);font-size:11px;white-space:nowrap}
+.filter:focus-within{border-color:var(--accent)}
+.filter select{appearance:none;-webkit-appearance:none;max-width:128px;padding:0 14px 0 1px;background:transparent;border:0;outline:0;color:var(--text);font:500 12px var(--font);cursor:pointer;text-overflow:ellipsis}
+.filter .chev{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:grid;place-items:center;pointer-events:none;color:var(--text-dim)}
+.filter .chev svg{width:10px;height:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 9px;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--muted);font:500 12px var(--font);white-space:nowrap}
+.btn:hover{background:var(--hover);border-color:var(--line);color:var(--text)}
+.btn:active{background:var(--selected)}
+.btn svg{width:14px;height:14px;flex:none}
+.btn-icon{width:28px;padding:0}
+.btn-label{display:inline}
+.tool-sep{width:1px;height:18px;background:var(--line);flex:none}
+
+/* ---------- espacio de trabajo ---------- */
+.workspace{
+  display:grid;min-height:0;min-width:0;
+  grid-template-columns:var(--tree-w) 5px minmax(0,1fr) 5px var(--insp-w);
+  background:var(--bg);
+}
+.workspace.rail-mode{--insp-w:34px}
+.splitter{position:relative;background:var(--surface);cursor:col-resize;touch-action:none;z-index:4}
+.splitter::before{content:"";position:absolute;inset:0 auto 0 50%;width:1px;transform:translateX(-50%);background:var(--line)}
+.splitter:hover::before,.splitter:focus-visible::before{width:2px;background:var(--accent)}
+.splitter:focus-visible{outline:none}
+body.resizing{user-select:none;cursor:col-resize}
+
+/* ---------- árbol ---------- */
+.tree{display:flex;flex-direction:column;min-width:0;overflow:hidden;background:var(--surface);border-right:1px solid var(--line)}
+.tree-head{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-bottom:1px solid var(--line-soft);flex:none}
+.tree-head .label{font:600 10.5px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)}
+.tree-head .count{margin-left:auto;font:400 10.5px var(--mono);color:var(--faint)}
+.tree-scroll{flex:1;overflow:auto;padding:6px 6px 12px}
+.mount-btn{display:flex;align-items:center;gap:6px;width:100%;height:28px;padding:0 6px;background:none;border:0;border-radius:5px;color:var(--text);font:500 12px var(--font);text-align:left}
+.mount-btn:hover{background:var(--hover)}
+.mount-btn .chev{display:grid;place-items:center;color:var(--text-dim);transition:transform .15s}
+.mount-btn .chev svg{width:11px;height:11px}
+.mount-btn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.mount-btn .db{color:var(--text-dim);display:grid;place-items:center}
+.mount-btn .db svg{width:13px;height:13px}
+.mount-btn .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mount-btn .mode{margin-left:auto;padding:1px 4px;border:1px solid var(--line);border-radius:3px;color:var(--text-dim);font:500 9px/1.2 var(--mono);white-space:nowrap}
+.nodes{margin:2px 0 8px}
+.table-node{display:flex;align-items:center;gap:6px;width:100%;height:27px;padding:0 6px 0 26px;background:none;border:0;border-radius:5px;color:var(--muted);font:400 12px var(--font);text-align:left}
+.table-node:hover{background:var(--hover);color:var(--text)}
+.table-node .ico{width:11px;height:11px;color:var(--faint);flex:none}
+.table-node .count{margin-left:auto;font:400 10.5px var(--mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.table-node[aria-current="true"]{background:var(--accent-soft);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+.table-node[aria-current="true"] .count{color:var(--muted)}
+.table-node[aria-current="true"] .ico{color:var(--accent)}
+.tree-foot{display:flex;align-items:center;gap:6px;flex:none;padding:8px 10px;border-top:1px solid var(--line-soft);color:var(--text-dim);font:400 10.5px var(--font)}
+.tree-foot svg{width:10px;height:10px;flex:none}
+
+/* ---------- área central ---------- */
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.table-head{position:relative;display:flex;align-items:center;gap:9px;height:40px;padding:0 12px;border-bottom:1px solid var(--line);flex:none;min-width:0}
+.table-title{font:600 13px var(--mono);color:var(--text);white-space:nowrap}
+.table-meta{display:flex;align-items:center;gap:7px;color:var(--text-dim);font:400 11px var(--font);min-width:0;white-space:nowrap;overflow:hidden}
+.table-meta b{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.dotsep{width:2px;height:2px;border-radius:50%;background:var(--line-strong);flex:none}
+.table-actions{margin-left:auto;display:flex;align-items:center;gap:2px;flex:none}
+.table-actions .btn[aria-expanded="true"]{background:var(--selected);border-color:var(--line-strong);color:var(--text)}
+.table-scroll{flex:1;min-height:0;overflow:auto;position:relative;background:var(--bg)}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px}
+thead th{position:sticky;top:0;z-index:3;height:30px;padding:0;background:var(--panel);border-bottom:1px solid var(--line);text-align:left;font:600 9px/1 var(--font);letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+thead th.num{text-align:right}
+.th-btn{display:flex;align-items:center;gap:5px;width:100%;height:30px;padding:0 8px;background:none;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;overflow:hidden}
+thead th.num .th-btn{justify-content:flex-end}
+.th-btn:hover{background:var(--hover);color:var(--text)}
+.th-btn>span:first-child{overflow:hidden;text-overflow:ellipsis}
+.sort{flex:none;margin-left:3px;font:400 9px/1 var(--mono);color:var(--faint);opacity:0}
+.th-btn:hover .sort{opacity:.7}
+thead th[aria-sort="ascending"],thead th[aria-sort="descending"]{background:#101827}
+thead th[aria-sort="ascending"] .th-btn,thead th[aria-sort="descending"] .th-btn{color:var(--text)}
+thead th[aria-sort="ascending"] .sort,thead th[aria-sort="descending"] .sort{color:var(--accent);opacity:1;font-size:10px}
+tbody tr{outline:none}
+tbody tr:hover td{background:var(--hover)}
+tbody tr.is-selected td{background:var(--selected)}
+tbody tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+tbody tr:focus-visible td{background:var(--selected)}
+tbody tr:focus-visible td:first-child{box-shadow:inset 2px 0 0 var(--accent-2),inset 0 0 0 1px rgba(147,197,253,.55)}
+tbody td{height:30px;padding:0 8px;border-bottom:1px solid var(--line-soft);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);font:400 12px var(--mono)}
+tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody td.badge-cell{overflow:hidden}
+.empty{height:120px!important;text-align:center;color:var(--text-dim);font:400 12.5px var(--font);white-space:normal}
+.empty button{margin-left:6px;padding:2px 7px;background:var(--raised);border:1px solid var(--line);border-radius:4px;color:var(--accent);font:500 11.5px var(--font)}
+.v-null{color:var(--faint)}
+.v-date{color:var(--text-dim)}
+.v-num{font-variant-numeric:tabular-nums}
+.v-uuid{color:var(--muted);cursor:help}
+.v-bool{font-weight:600}
+.v-true{color:var(--ok)}
+.v-false{color:var(--err)}
+.v-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v-text.expandable{cursor:zoom-in;border-radius:2px}
+.v-text.expandable:hover{color:var(--accent-2)}
+.v-text.expandable:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+td.text-cell.is-expanded{white-space:normal;overflow:visible;padding-top:6px;padding-bottom:6px;line-height:1.5;text-overflow:clip}
+td.text-cell.is-expanded .v-text{white-space:normal;overflow:visible;cursor:zoom-out}
+.v-json{display:inline;color:var(--text)}
+.v-json .j-punc{color:var(--text-dim)}
+.v-blob{vertical-align:middle}
+.j-key{color:#8fb8ff}
+.j-str{color:#a8dcae}
+.j-num{color:#e8c07a}
+.j-bool{color:var(--violet)}
+.j-null{color:var(--faint)}
+.j-punc{color:var(--text-dim)}
+.badge{display:inline-flex;align-items:center;height:18px;padding:0 6px;border:1px solid transparent;border-radius:4px;font:500 10.5px var(--font);letter-spacing:.01em;white-space:nowrap}
+.badge-decision{color:#a8c3ff;background:rgba(122,167,255,.13);border-color:rgba(122,167,255,.24)}
+.badge-discovery{color:#ecc98a;background:rgba(232,192,122,.1);border-color:rgba(232,192,122,.24)}
+.badge-session-summary{color:#cfb9ff;background:rgba(192,166,255,.1);border-color:rgba(192,166,255,.24)}
+.badge-topic,.badge-project,.badge-tool,.badge-muted{color:var(--muted);background:var(--raised);border-color:var(--line)}
+.blob-chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;background:var(--raised);border:1px solid var(--line-strong);border-radius:4px;color:var(--text);font:500 10.5px var(--mono);letter-spacing:.02em;white-space:nowrap}
+.blob-chip:hover{border-color:var(--accent);color:var(--accent)}
+.blob-chip svg{width:9px;height:9px;color:var(--text-dim)}
+.skeleton-row td{height:30px;background:var(--bg)}
+.sk{display:block;height:8px;border-radius:3px;background:linear-gradient(90deg,var(--line-soft) 25%,#273142 50%,var(--line-soft) 75%);background-size:220% 100%;animation:shimmer 1.2s linear infinite}
+@keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+
+/* ---------- paginación ---------- */
+.pagination{display:flex;align-items:center;gap:9px;height:34px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg);color:var(--text-dim);font:500 11px var(--font);flex:none;min-width:0}
+.range{font:400 11px var(--mono);color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pagination .spacer{flex:1}
+.page-size{color:var(--text-dim);white-space:nowrap}
+.pg-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;background:transparent;border:1px solid var(--line);border-radius:4px;color:var(--muted)}
+.pg-btn svg{width:11px;height:11px}
+.pg-btn:disabled{opacity:.38;cursor:not-allowed}
+.pg-btn:not(:disabled):hover{background:var(--hover);color:var(--text)}
+
+/* ---------- inspector ---------- */
+.inspector{display:flex;flex-direction:column;min-width:0;overflow:hidden;background:var(--surface);border-left:1px solid var(--line)}
+.insp-head{display:flex;align-items:center;gap:7px;height:40px;padding:0 7px 0 12px;border-bottom:1px solid var(--line);flex:none;min-width:0}
+.insp-head .label{font:600 10.5px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+.insp-head .pk{font:500 11px var(--mono);color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.insp-head .btn{margin-left:auto;flex:none}
+.insp-body{flex:1;overflow:auto;padding-bottom:16px}
+.insp-path{padding:9px 12px;border-bottom:1px solid var(--line-soft);color:var(--text-dim);font:400 10.5px/1.5 var(--mono);word-break:break-all}
+.insp-badges{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px 12px 0}
+.field{padding:8px 12px;border-bottom:1px solid var(--line-soft)}
+.field:last-child{border-bottom:0}
+.field-top{display:flex;align-items:center;gap:6px;min-width:0}
+.field-name{font:600 11.5px var(--font);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.type-pill{flex:none;padding:1px 4px;border:1px solid var(--line);border-radius:3px;color:var(--text-dim);font:500 9px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.03em}
+.copy-field{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:auto;flex:none;background:none;border:1px solid transparent;border-radius:4px;color:var(--text-dim)}
+.copy-field:hover{background:var(--hover);border-color:var(--line);color:var(--text)}
+.copy-field.ok{color:var(--ok);border-color:rgba(111,220,154,.35)}
+.copy-field svg{width:12px;height:12px}
+.field-value{margin-top:4px;font:400 12px/1.5 var(--mono);color:var(--text);overflow-wrap:anywhere}
+.field-value .v-bool,.field-value .v-null{font-family:var(--sans);font-size:12.5px}
+.json-block,.hex-block{margin:4px 0 0;padding:8px;background:var(--sunken);border:1px solid var(--line);border-radius:5px;font:400 11.5px/1.5 var(--mono);color:var(--text);overflow:auto;white-space:pre}
+.hex-block{color:var(--muted);max-height:140px}
+.insp-empty{padding:16px 12px;color:var(--text-dim);font:400 12px/1.6 var(--font)}
+.rail-open{display:none;flex-direction:column;align-items:center;gap:12px;width:100%;height:100%;padding:9px 0;background:none;border:0;color:var(--text-dim)}
+.rail-open:hover{color:var(--text);background:var(--hover)}
+.rail-open svg{width:13px;height:13px}
+.rail-vert{writing-mode:vertical-rl;font:600 10px var(--font);letter-spacing:.12em;text-transform:uppercase}
+.rail-mode .insp-head,.rail-mode .insp-body{display:none}
+.rail-mode .rail-open{display:flex}
+
+/* ---------- barra de estado ---------- */
+.statusbar{display:flex;align-items:center;gap:11px;min-width:0;height:27px;padding:0 10px;background:var(--sunken);border-top:1px solid var(--line);color:var(--text-dim);font:500 11px var(--font)}
+.status-path{display:flex;align-items:center;gap:5px;min-width:0;max-width:36vw;font:400 11px var(--mono);color:var(--muted);white-space:nowrap}
+.status-path svg{width:10px;height:10px;flex:none;color:var(--faint)}
+.status-path span{overflow:hidden;text-overflow:ellipsis}
+.status-item{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.status-item svg{width:10px;height:10px;flex:none}
+.statusbar .spacer{flex:1}
+.mode-tag{padding:0 4px;border:1px solid var(--line);border-radius:3px;color:var(--muted);font:500 9.5px/1.5 var(--mono)}
+.etag{font:400 10.5px var(--mono);color:var(--muted);white-space:nowrap;cursor:help}
+.load-toggle{display:inline-flex;align-items:center;gap:5px;height:19px;padding:0 6px;background:none;border:1px solid transparent;border-radius:4px;color:var(--text-dim);font:500 10.5px var(--font);white-space:nowrap}
+.load-toggle:hover{color:var(--text);border-color:var(--line)}
+.load-toggle .dot{width:5px;height:5px;border-radius:50%;background:var(--line-strong)}
+.load-toggle[aria-pressed="true"]{color:var(--warn);border-color:rgba(232,192,122,.35);background:rgba(232,192,122,.07)}
+.load-toggle[aria-pressed="true"] .dot{background:var(--warn);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.offline{color:var(--faint);font-size:10px;white-space:nowrap}
+
+/* ---------- menús, popovers, avisos ---------- */
+.popover{position:fixed;z-index:70;background:var(--raised);border:1px solid var(--line-strong);border-radius:7px;box-shadow:var(--shadow);color:var(--text)}
+.col-menu{position:absolute;top:36px;right:8px;width:238px;padding:5px}
+.col-menu-head{display:flex;align-items:center;gap:8px;padding:4px 6px 7px;margin-bottom:3px;border-bottom:1px solid var(--line-soft);font:600 10px var(--font);letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim)}
+.col-menu-head button{margin-left:auto;padding:2px;background:none;border:0;color:var(--accent);font:500 10px var(--font)}
+.col-row{display:flex;align-items:center;gap:8px;min-height:26px;padding:3px 6px;border-radius:4px;font:400 12px var(--font);color:var(--text)}
+.col-row:hover{background:var(--hover)}
+.col-row input{width:13px;height:13px;margin:0;accent-color:var(--accent);flex:none}
+.col-row .t{margin-left:auto;color:var(--text-dim);font:400 9px var(--mono);text-transform:uppercase}
+.hex-pop{width:352px;max-width:calc(100vw - 24px);padding:0;overflow:hidden}
+.hex-pop header{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font:500 11.5px var(--font)}
+.hex-pop header .tag{color:var(--text-dim);font:400 10.5px var(--mono)}
+.hex-pop header button{margin-left:auto;display:grid;place-items:center;width:22px;height:22px;background:none;border:1px solid transparent;border-radius:4px;color:var(--text-dim)}
+.hex-pop header button:hover{color:var(--text);border-color:var(--line)}
+.hex-pop header button svg{width:11px;height:11px}
+.hex-pop pre{margin:0;padding:9px 10px;background:var(--sunken);color:var(--muted);font:400 11px/1.55 var(--mono);overflow:auto;max-height:190px;white-space:pre}
+.hex-pop .hex-foot{padding:5px 10px;border-top:1px solid var(--line);color:var(--text-dim);font:400 10px var(--mono)}
+.toast{position:fixed;left:50%;bottom:44px;z-index:80;transform:translate(-50%,8px);opacity:0;pointer-events:none;padding:6px 11px;background:var(--raised);border:1px solid var(--line-strong);border-radius:6px;box-shadow:var(--shadow);color:var(--text);font:500 11.5px var(--font);transition:opacity .15s,transform .15s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- diálogo de notas ---------- */
+dialog{border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);color:var(--text);padding:0;width:min(640px,calc(100vw - 28px));box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(3,5,8,.72)}
+.notes-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.notes-head h2{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.notes-head p{margin:3px 0 0;color:var(--text-dim);font-size:11.5px}
+.notes-head .btn{margin-left:auto;flex:none}
+.notes-body{padding:12px 16px 14px;max-height:66vh;overflow:auto}
+.notes-body h3{margin:14px 0 5px;color:var(--text-dim);font:600 10px var(--font);letter-spacing:.08em;text-transform:uppercase}
+.notes-body h3:first-child{margin-top:0}
+.notes-body p,.notes-body li{color:var(--muted);font-size:12.5px;line-height:1.6}
+.notes-body p{margin:0 0 8px}
+.notes-body ul{margin:0 0 8px;padding-left:17px}
+.notes-body li{margin:3px 0}
+.notes-body code{padding:1px 4px;border:1px solid var(--line);border-radius:3px;background:var(--sunken);font:400 11.5px var(--mono);color:var(--text)}
+.quote{margin:0;padding:8px 10px;border-left:2px solid var(--accent);background:var(--accent-soft);color:var(--text);font-size:12.5px;line-height:1.55}
+.notes-foot{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid var(--line)}
+.notes-foot .btn{border-color:var(--line-strong)}
+.notes-foot .btn:hover{border-color:var(--accent);background:var(--hover)}
+.notes-foot .btn-primary{border-color:var(--accent);background:var(--accent);color:#07101f}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#07101f;font-weight:600}
+.btn-primary:hover{background:var(--accent-2);border-color:var(--accent-2);color:#07101f}
+.btn-primary.ok{background:var(--ok);border-color:var(--ok)}
+
+/* ---------- adaptación ---------- */
+@media (max-width:1180px){
+  .titlebar .meta{display:none}
+  .statusbar .etag,.statusbar .offline{display:none}
+}
+@media (max-width:1000px){
+  .workspace{grid-template-columns:var(--tree-w) 5px minmax(0,1fr)}
+  #split-right,.inspector{display:none}
+  .statusbar .status-rows{display:none}
+}
+@media (max-width:820px){
+  .search kbd,.btn-label{display:none}
+}
+@media (max-width:760px){
+  .frame{padding:0}
+  .window{border-radius:0;border:0}
+  .workspace{grid-template-columns:minmax(0,1fr)}
+  #split-left,.tree{display:none}
+  .toolbar{gap:6px;padding:0 8px}
+  .filter,.tool-sep{display:none}
+  .search{margin-left:0;padding:0 6px}
+  .table-head{padding:0 8px;gap:6px}
+  .table-meta .cols-meta{display:none}
+  .status-path{max-width:52vw}
+  .statusbar .status-cols,.statusbar .offline{display:none}
+  .titlebar .tlink.meta-link{display:none}
+}
+@media (max-width:520px){
+  .titlebar .pill{display:none}
+  .crumbs{min-width:140px}
+  .search{min-width:90px}
+  .crumbs .record{display:none}
+  .statusbar .mode-tag{display:none}
+  .statusbar .load-toggle .lbl{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .sk{background:var(--line-soft)}
+}
+</style>
+</head>
+<body>
+<!-- procedencia: {"prompt": "Maqueta HTML funcional y autocontenida del explorador web db-ai Visual Explorer para aprobación del PO", "fecha": "2026-11-20", "familia": "prototipo", "fuentes": [".tasks-ai/tasks.db:54 (P2: Maqueta visual y aprobación del PO)", "docs/DESIGN.md:78 (rutas virtuales y tipos)", "encargo del PO (conversación, 2026-11-20)"]} -->
+<div class="frame">
+  <div class="window">
+
+    <header class="titlebar">
+      <a class="brand" href="index.html" title="Volver al índice de artefactos de explain-html">
+        <span class="logo" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.6" rx="5" ry="1.9"/><path d="M3 3.6v8.8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9V3.6"/><path d="M3 8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9"/></svg></span>
+        <strong>db-ai Visual Explorer</strong>
+      </a>
+      <span class="pill">maqueta</span>
+      <span class="spacer"></span>
+      <span class="meta">Prototipo de diseño · 20-11-2026</span>
+      <button class="tlink" type="button" id="open-notes">Notas</button>
+      <a class="tlink meta-link" href="index.html">Índice</a>
+    </header>
+
+    <div class="toolbar">
+      <nav class="crumbs" id="crumbs" aria-label="Ruta virtual"></nav>
+      <label class="search" for="q">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg>
+        <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Buscar en /acm/observation" aria-label="Buscar en la tabla">
+        <kbd aria-hidden="true">/</kbd>
+      </label>
+      <label class="filter" for="filter">
+        <span id="filter-label">Tipo</span>
+        <select id="filter" aria-label="Filtrar filas"></select>
+        <span class="chev" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg></span>
+      </label>
+      <span class="tool-sep" aria-hidden="true"></span>
+      <button class="btn" type="button" id="refresh" title="Refrescar la vista (simulado)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.4 7A5.5 5.5 0 1 0 12 11.4"/><path d="M13.6 2.8v4.1h-4.1"/></svg>
+        <span class="btn-label">Refrescar</span>
+      </button>
+      <button class="btn" type="button" id="copy-path" title="Copiar la ruta virtual seleccionada">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>
+        <span class="btn-label">Copiar ruta</span>
+      </button>
+    </div>
+
+    <div class="workspace" id="workspace">
+      <nav class="tree" aria-label="Montajes y tablas">
+        <div class="tree-head"><span class="label">Montajes</span><span class="count">2</span></div>
+        <div class="tree-scroll">
+          <button class="mount-btn" type="button" aria-expanded="true" aria-controls="nodes-acm" data-mount="acm">
+            <span class="chev" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3l5 5-5 5"/></svg></span>
+            <span class="db" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.6" rx="5" ry="1.9"/><path d="M3 3.6v8.8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9V3.6"/><path d="M3 8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9"/></svg></span>
+            <span class="name">acm</span>
+            <span class="mode">ro</span>
+          </button>
+          <div class="nodes" id="nodes-acm">
+            <button class="table-node" type="button" data-table-node="sessions" aria-current="false">
+              <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+              sessions<span class="count">8</span>
+            </button>
+            <button class="table-node" type="button" data-table-node="observation" aria-current="true">
+              <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+              observation<span class="count">12.431</span>
+            </button>
+            <button class="table-node" type="button" data-table-node="tags" aria-current="false">
+              <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+              tags<span class="count">12</span>
+            </button>
+          </div>
+
+          <button class="mount-btn" type="button" aria-expanded="true" aria-controls="nodes-commerce" data-mount="commerce">
+            <span class="chev" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3l5 5-5 5"/></svg></span>
+            <span class="db" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.6" rx="5" ry="1.9"/><path d="M3 3.6v8.8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9V3.6"/><path d="M3 8c0 1.05 2.24 1.9 5 1.9s5-.85 5-1.9"/></svg></span>
+            <span class="name">commerce</span>
+            <span class="mode">ro-rw</span>
+          </button>
+          <div class="nodes" id="nodes-commerce">
+            <button class="table-node" type="button" data-table-node="orders" aria-current="false">
+              <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+              orders<span class="count">34.120</span>
+            </button>
+            <button class="table-node" type="button" data-table-node="customers" aria-current="false">
+              <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg></span>
+              customers<span class="count">2.940</span>
+            </button>
+          </div>
+        </div>
+        <div class="tree-foot">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="6.5" rx="1"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>
+          <span>2 montajes · solo lectura</span>
+        </div>
+      </nav>
+
+      <div class="splitter" id="split-left" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar el árbol" aria-valuemin="168" aria-valuemax="320" aria-valuenow="200"></div>
+
+      <section class="main" aria-label="Vista tabular">
+        <div class="table-head">
+          <h1 class="table-title" id="table-title">observation</h1>
+          <div class="table-meta">
+            <span class="dotsep" aria-hidden="true"></span>
+            <span><b id="meta-rows">12.431</b> filas</span>
+            <span class="cols-meta"><span class="dotsep" aria-hidden="true"></span> <b id="meta-cols">7</b> columnas</span>
+            <span class="dotsep" aria-hidden="true"></span>
+            <span><b id="meta-mount">acm</b> · <span id="meta-mode">ro</span></span>
+          </div>
+          <div class="table-actions">
+            <button class="btn" type="button" id="columns-btn" aria-expanded="false" aria-controls="col-menu" title="Elegir columnas visibles">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10M10 3v10"/></svg>
+              <span>Columnas</span>
+            </button>
+          </div>
+          <div class="popover col-menu" id="col-menu" role="group" aria-label="Columnas visibles" hidden></div>
+        </div>
+        <div class="table-scroll" id="table-scroll">
+          <table id="grid">
+            <caption class="sr-only" id="table-caption">Registros de observation</caption>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span class="range" id="page-range">1–25 de 12.431</span>
+          <span class="spacer"></span>
+          <span class="page-size">25 / página</span>
+          <button class="pg-btn" type="button" disabled title="Maqueta: solo la primera página" aria-label="Página anterior"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3L5 8l5 5"/></svg></button>
+          <button class="pg-btn" type="button" disabled title="Maqueta: solo la primera página" aria-label="Página siguiente"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3l5 5-5 5"/></svg></button>
+        </div>
+      </section>
+
+      <div class="splitter" id="split-right" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar el inspector" aria-valuemin="248" aria-valuemax="460" aria-valuenow="288"></div>
+
+      <aside class="inspector" id="inspector" aria-label="Inspector del registro">
+        <div class="insp-head">
+          <span class="label">Inspector</span>
+          <span class="pk" id="insp-pk"></span>
+          <button class="btn btn-icon" type="button" id="collapse-inspector" aria-expanded="true" aria-controls="inspector-body" title="Plegar el inspector" aria-label="Plegar el inspector">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          </button>
+        </div>
+        <div class="insp-body" id="inspector-body"></div>
+        <button class="rail-open" type="button" id="expand-inspector" title="Desplegar el inspector">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+          <span class="rail-vert">Inspector</span>
+        </button>
+      </aside>
+    </div>
+
+    <footer class="statusbar">
+      <span class="status-path" id="status-path"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3h4l1.5 2H14v8H2z"/></svg><span></span></span>
+      <span class="status-item status-rows"><span id="status-rows">25 de 12.431 filas</span></span>
+      <span class="status-item status-cols"><span id="status-cols">7/7 columnas</span></span>
+      <span class="status-item"><span class="mode-tag" id="status-mode">acm · ro</span></span>
+      <span class="status-item" id="ro-item" title="El explorador no escribe en ningún montaje"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="6.5" rx="1"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>solo lectura</span>
+      <span class="spacer"></span>
+      <button class="load-toggle" type="button" id="load-toggle" aria-pressed="false" title="Alternar el estado de carga de la maqueta"><span class="dot" aria-hidden="true"></span><span class="lbl">Estado de carga</span></button>
+      <span class="offline">sin red · file://</span>
+      <span class="etag" id="status-etag">ETag sha256:9f2c4…</span>
+    </footer>
+
+  </div>
+</div>
+
+<div class="popover hex-pop" id="hex-pop" hidden>
+  <header><span id="hex-title">avatar</span><span class="tag" id="hex-size">BLOB 4.2 KB</span><button type="button" id="hex-close" aria-label="Cerrar vista hexadecimal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg></button></header>
+  <pre id="hex-body"></pre>
+  <div class="hex-foot">muestra · primeros 48 bytes</div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="notes" aria-labelledby="notes-title">
+  <div class="notes-head">
+    <div>
+      <h2 id="notes-title">Notas de la maqueta</h2>
+      <p>Prototipo de diseño · sin servidor · datos sintéticos</p>
+    </div>
+    <button class="btn btn-icon" type="button" id="close-notes" aria-label="Cerrar notas"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg></button>
+  </div>
+  <div class="notes-body">
+    <h3>Qué se está probando</h3>
+    <ul>
+      <li>Densidad de tabla (filas de 30 px, 12–13 px) y jerarquía de tres paneles.</li>
+      <li>Representación de tipos: NULL con ∅, JSON coloreado, texto truncado y expandible, BLOB con vista hex, números, fechas y booleanos.</li>
+      <li>Ordenación por cabecera, menú de columnas, búsqueda, filtro y breadcrumb sobre 25 filas cargadas.</li>
+      <li>Divisores arrastrables, inspector plegable y persistencia visual en <code>localStorage</code>.</li>
+    </ul>
+
+    <h3>Estado de carga</h3>
+    <p>El control «Estado de carga» de la barra inferior inserta una fila skeleton y atenúa la tabla; «Refrescar» lo simula durante 700 ms.</p>
+
+    <h3>Criterio de aceptación</h3>
+    <p class="quote">La maqueta HTML con datos representativos existe en .explanations/ y el PO la aprueba, o los ajustes que pida quedan aplicados y ratificados.</p>
+
+    <h3>Desconocidos y límites</h3>
+    <ul>
+      <li>Solo se cargan 25 filas de <code>observation</code>; paginación, búsqueda y ordenación son cliente y la paginación no navega.</li>
+      <li>Los datos son sintéticos: no provienen de la base ACM ni de commerce reales.</li>
+      <li>Tema único oscuro por requisito del PO; no hay conmutador claro/oscuro.</li>
+      <li>No comprobado: render en Safari y Firefox, lector de pantalla, ni la presencia real de Fira Sans e Inconsolata en el equipo (hay fallbacks).</li>
+    </ul>
+  </div>
+  <div class="notes-foot">
+    <button class="btn" type="button" id="copy-state">Copiar como prompt</button>
+    <button class="btn btn-primary" type="button" id="notes-ok">Entendido</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (sel, root) { return (root || document).querySelector(sel); };
+  var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var fmtInt = new Intl.NumberFormat("es-ES");
+  var fmtReal = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var fmt = function (n) { return fmtInt.format(n); };
+  var norm = function (s) {
+    return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  };
+  var shortId = function (v) {
+    v = String(v);
+    return v.length > 14 ? v.slice(0, 4) + "…" + v.slice(-4) : v;
+  };
+  var typeLabel = function (t) {
+    return ({ uuid: "uuid", iso: "iso8601", enum: "enum", text: "text", json: "json", real: "real", integer: "integer", boolean: "boolean", blob: "blob" })[t] || t;
+  };
+  var slug = function (v) { return String(v).replace(/_/g, "-"); };
+
+  var ICONS = {
+    copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>',
+    blob: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>'
+  };
+
+  var HEX_SEED = "89504e470d0a1a0a0000000d4948445200000040000000400806000000aa6971de0001e2b3c4d5e6f708192a3b4c5d6e7f8031425364758697a8b9cadbecfd0e1f2031425364758697a8b9cadbecfd0e1f2031425364758697a8b9cadbecfd0e1f20";
+
+  var TABLES = {
+    observation: {
+      mount: "acm", mode: "ro", label: "observation", total: 12431, pk: "id", minWidth: 880,
+      etag: "sha256:9f2c41d7b0a3e86c5d1f2b7a9e4c8d13f6a0b5c2e7d9a4f1c8b3e6d0a2f5c9b1",
+      defaultSort: { key: "ts", dir: "desc" },
+      filter: { key: "kind", label: "Tipo", all: "Todos los tipos" },
+      cols: [
+        { key: "id", label: "id", type: "uuid", width: 90 },
+        { key: "ts", label: "ts", type: "iso", width: 164 },
+        { key: "kind", label: "kind", type: "enum", width: 116 },
+        { key: "content", label: "content", type: "text", width: null },
+        { key: "tags", label: "tags", type: "json", width: 128 },
+        { key: "confidence", label: "confidence", type: "real", width: 106, align: "right" },
+        { key: "project", label: "project", type: "text", width: 76 }
+      ],
+      rows: [
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c01", ts: "2026-11-20T14:32:08Z", kind: "decision", content: "El cursor de paginación se firma con la proyección canónica y el orden resuelto; cambiar de columnas entre páginas invalida el cursor con E_USAGE.", tags: ["serve", "contrato"], confidence: 0.94, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c02", ts: "2026-11-20T13:58:41Z", kind: "discovery", content: "El watcher de ficheros no observa las rutas UNC que WSL expone; el índice de esas carpetas queda congelado y solo se refresca con un rescan manual. Se verificó con tres ciclos de escritura y cinco minutos de espera: el contador de ficheros no cambió. La mitigación es documentar el límite y disparar un rescan al abrir la carpeta, nunca prometer tiempo real fuera del sistema de ficheros local.", tags: ["miyo", "watcher"], confidence: null, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c03", ts: "2026-11-20T13:40:12Z", kind: "decision", content: "El ETag cubre la fila completa y no cambia con --fields: la proyección es una optimización de salida, no de lectura.", tags: ["etag", "adr-006"], confidence: 0.97, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c04", ts: "2026-11-20T12:15:03Z", kind: "discovery", content: "SQLite en modo WAL sobre un volumen de red devuelve SQLITE_IOERR_LOCK; el montaje debe rechazar rutas no locales antes de abrir.", tags: ["sqlite", "mount"], confidence: 0.88, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c05", ts: "2026-11-20T11:02:55Z", kind: "session_summary", content: "Sesión de contrato ACM: tipos inferidos, límite de 25 filas por página y rutas relativas sin barra final.", tags: ["acm", "contrato"], confidence: 0.91, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c06", ts: "2026-11-20T10:44:20Z", kind: "decision", content: "El explorador abre todos los montajes en solo lectura; ro-rw habilita escritura únicamente por CLI en la primera versión.", tags: ["seguridad", "mount"], confidence: 0.96, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c07", ts: "2026-11-19T19:27:36Z", kind: "discovery", content: "La deduplicación por contenido reduce un 38 % el almacenamiento de adjuntos duplicados, pero rompe la trazabilidad por carpeta si el índice guarda una sola ruta canónica. Se acordó almacenar todas las rutas observadas como enlaces al mismo blob y mostrar la primera como principal. El coste es un índice invertido adicional de 4 bytes por ruta; con 1,2 millones de ficheros son 4,8 MB, asumible en SQLite con page_size 4096.", tags: ["almacenamiento", "dedupe"], confidence: null, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c08", ts: "2026-11-19T18:41:09Z", kind: "discovery", content: "El tokenizador FTS5 unicode61 con remove_diacritics 2 baja el recall de términos compuestos; se evalúa porter para el índice de notas.", tags: ["fts5", "búsqueda"], confidence: 0.73, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c09", ts: "2026-11-19T17:20:48Z", kind: "session_summary", content: "Revisión de la maqueta: filas de 30 px, Inconsolata para valores y Fira Sans para la interfaz; el inspector se pliega desde su cabecera.", tags: ["ui", "maqueta"], confidence: 0.89, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0a", ts: "2026-11-19T16:05:11Z", kind: "decision", content: "El árbol agrupa por montaje y tabla; las columnas no se muestran hasta seleccionar una tabla para no saturar el panel.", tags: ["árbol", "navegación"], confidence: 0.84, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0b", ts: "2026-11-19T15:22:30Z", kind: "discovery", content: "Los BLOB se muestran como chip con tamaño y vista hex de los primeros 96 bytes; nunca se descarga el contenido completo en la vista.", tags: ["blob", "rendimiento"], confidence: 0.92, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0c", ts: "2026-11-19T14:11:07Z", kind: "session_summary", content: "Cierre de la iteración 04: verificación de ETags, paginación y errores de montaje; queda pendiente la exportación JSON.", tags: ["cierre", "iteración"], confidence: null, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0d", ts: "2026-11-19T13:03:44Z", kind: "discovery", content: "La búsqueda cliente debe ignorar diacríticos: «sesion» encuentra «sesión» en el contenido y en las etiquetas.", tags: ["búsqueda", "ux"], confidence: 0.68, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0e", ts: "2026-11-19T12:30:02Z", kind: "decision", content: "Los valores NULL se muestran con el glifo ∅ y no con texto vacío, para distinguirlos de una cadena vacía.", tags: ["tipos", "ui"], confidence: 0.95, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c0f", ts: "2026-11-19T11:45:19Z", kind: "discovery", content: "A 30 px de alto de fila, 12,5 px de Inconsolata mantiene contraste AA en tema oscuro sin perder densidad.", tags: ["diseño", "accesibilidad"], confidence: 0.81, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c10", ts: "2026-11-19T10:12:51Z", kind: "decision", content: "La ruta virtual canónica es /mount/tabla/clave; el inspector copia esa ruta y nunca la ruta de fichero.", tags: ["rutas", "seguridad"], confidence: 0.97, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c11", ts: "2026-11-18T18:55:23Z", kind: "discovery", content: "Los UUIDv7 de observación ordenan cronológicamente por prefijo de tiempo; ordenar por id equivale a ordenar por creación.", tags: ["uuidv7", "orden"], confidence: 0.87, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c12", ts: "2026-11-18T17:34:16Z", kind: "session_summary", content: "Prueba con commerce: moneda por fila, totales con dos decimales y envíos nulos en el 18 % de los pedidos.", tags: ["commerce", "validación"], confidence: 0.77, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c13", ts: "2026-11-18T16:20:05Z", kind: "decision", content: "El panel de columnas persiste por tabla; cambiar de tabla restaura su propia visibilidad, no una global.", tags: ["preferencias", "columnas"], confidence: 0.9, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c14", ts: "2026-11-18T15:01:32Z", kind: "discovery", content: "Arrastrar el divisor con puntero capturado evita seleccionar texto de la tabla; el tamaño se guarda al soltar.", tags: ["ui", "divisores"], confidence: 0.74, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c15", ts: "2026-11-18T13:48:59Z", kind: "decision", content: "El estado de carga inserta una fila skeleton y bloquea la selección; vuelve a la tabla sin recargar datos.", tags: ["carga", "estado"], confidence: 0.83, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c16", ts: "2026-11-18T12:27:41Z", kind: "discovery", content: "Los JSON largos se colorean por token y se truncan a una línea en la tabla; el inspector ofrece el documento completo.", tags: ["json", "tipos"], confidence: 0.93, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c17", ts: "2026-11-18T11:39:10Z", kind: "session_summary", content: "Revisión del contrato de etiquetas: tres tipos, dos estructurales y cero etiquetas libres en tareas nuevas.", tags: ["etiquetas", "contrato"], confidence: null, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c18", ts: "2026-11-18T10:08:27Z", kind: "discovery", content: "El contador de filas del árbol se lee del catálogo, no del recuento visible: 12.431 frente a 25 cargadas.", tags: ["árbol", "paginación"], confidence: 0.86, project: "acm" },
+        { id: "019a4f2c-8d31-7c4a-9e02-1b7f3a6d2c19", ts: "2026-11-17T19:12:44Z", kind: "decision", content: "Se descarta el modo edición en la maqueta: la primera entrega solo simula lectura y navegación.", tags: ["alcance", "maqueta"], confidence: 0.99, project: "acm" }
+      ]
+    },
+    sessions: {
+      mount: "acm", mode: "ro", label: "sessions", total: 8, pk: "id", minWidth: 880,
+      etag: "sha256:4b7e19c2f8a6d05e3c9b1d7a2f8e6c4b0a9d3f1e7c5b2a8d6f4e0c9b3a7d1e5f",
+      defaultSort: { key: "ts", dir: "desc" },
+      filter: { key: "kind", label: "Tipo", all: "Todos los tipos" },
+      cols: [
+        { key: "id", label: "id", type: "uuid", width: 90 },
+        { key: "ts", label: "ts", type: "iso", width: 164 },
+        { key: "kind", label: "kind", type: "enum", width: 116 },
+        { key: "content", label: "content", type: "text", width: null },
+        { key: "tags", label: "tags", type: "json", width: 128 },
+        { key: "confidence", label: "confidence", type: "real", width: 106, align: "right" },
+        { key: "project", label: "project", type: "text", width: 76 }
+      ],
+      rows: [
+        { id: "019a4e10-1e2a-7a31-8b02-4c5d6e7f8a01", ts: "2026-11-20T09:05:00Z", kind: "session_summary", content: "Sesión matinal: revisión del explorador y de la representación de tipos en tabla e inspector.", tags: ["ui", "explorador"], confidence: 0.9, project: "acm" },
+        { id: "019a4e0f-2b4c-7d52-9c14-5d6e7f8a9b02", ts: "2026-11-19T18:40:00Z", kind: "session_summary", content: "Cierre del día: contrato de rutas y ETag revisados; pendiente la exportación JSON.", tags: ["contrato", "etag"], confidence: 0.86, project: "acm" },
+        { id: "019a4e0d-3c5d-7e63-8d25-6e7f8a9b0c03", ts: "2026-11-19T12:20:00Z", kind: "session_summary", content: "Prueba con commerce: pedidos y clientes; se detectaron envíos nulos y avatares binarios.", tags: ["commerce", "pruebas"], confidence: 0.78, project: "acm" },
+        { id: "019a4e0b-4d6e-7f74-8e36-7f8a9b0c1d04", ts: "2026-11-18T16:45:00Z", kind: "session_summary", content: "Tarde de diseño: filas de 30 px, dos tipografías y paneles redimensionables.", tags: ["diseño", "maqueta"], confidence: 0.92, project: "acm" },
+        { id: "019a4e09-5e7f-7a85-8f47-8a9b0c1d2e05", ts: "2026-11-18T10:10:00Z", kind: "session_summary", content: "Sesión de validación con ACM: 12.431 observaciones y tres tipos de registro.", tags: ["acm", "validación"], confidence: 0.88, project: "acm" },
+        { id: "019a4e07-6f80-7b96-8a58-9b0c1d2e3f06", ts: "2026-11-17T17:30:00Z", kind: "session_summary", content: "Repaso de accesibilidad: contraste AA, foco visible y navegación por teclado en filas.", tags: ["accesibilidad", "ui"], confidence: null, project: "acm" },
+        { id: "019a4e05-7081-7ca7-8b69-0c1d2e3f4a07", ts: "2026-11-17T11:05:00Z", kind: "session_summary", content: "Revisión de límites: watcher UNC, BLOB truncado y búsqueda sin diacríticos.", tags: ["límites", "búsqueda"], confidence: 0.7, project: "acm" },
+        { id: "019a4e03-8182-7db8-8c7a-1d2e3f4a5b08", ts: "2026-11-16T18:15:00Z", kind: "session_summary", content: "Cierre de iteración: maqueta lista para el PO; queda la aprobación visual.", tags: ["cierre", "po"], confidence: 0.95, project: "acm" }
+      ]
+    },
+    tags: {
+      mount: "acm", mode: "ro", label: "tags", total: 12, pk: "id", minWidth: 680,
+      etag: "sha256:1c9d5e3a7b2f4e8c6a0d9f3b5c1e7a2d8f4b6c0e9a3d1f7b5c2e8a4d6f0b9c3e",
+      defaultSort: { key: "uses", dir: "desc" },
+      filter: { key: "kind", label: "Tipo", all: "Todos los tipos" },
+      cols: [
+        { key: "id", label: "id", type: "uuid", width: 90 },
+        { key: "name", label: "name", type: "text", width: 190 },
+        { key: "kind", label: "kind", type: "enum", width: 110 },
+        { key: "uses", label: "uses", type: "integer", width: 84, align: "right" },
+        { key: "created_at", label: "created_at", type: "iso", width: 164 }
+      ],
+      rows: [
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c01", name: "acm", kind: "project", uses: 187, created_at: "2026-08-02T09:12:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c02", name: "sqlite", kind: "tool", uses: 73, created_at: "2026-08-03T10:20:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c03", name: "commerce", kind: "project", uses: 64, created_at: "2026-08-05T15:45:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c04", name: "contrato", kind: "topic", uses: 52, created_at: "2026-08-08T11:05:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c05", name: "serve", kind: "tool", uses: 41, created_at: "2026-08-12T16:30:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c06", name: "ui", kind: "topic", uses: 34, created_at: "2026-08-19T09:40:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c07", name: "etag", kind: "topic", uses: 29, created_at: "2026-08-24T14:15:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c08", name: "búsqueda", kind: "topic", uses: 23, created_at: "2026-09-02T10:50:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c09", name: "maqueta", kind: "topic", uses: 21, created_at: "2026-09-10T17:00:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c0a", name: "json", kind: "topic", uses: 18, created_at: "2026-09-18T12:25:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c0b", name: "accesibilidad", kind: "topic", uses: 15, created_at: "2026-10-01T08:35:00Z" },
+        { id: "019a4b01-9a01-7e01-8d01-2e3f4a5b6c0c", name: "blob", kind: "topic", uses: 12, created_at: "2026-10-14T19:05:00Z" }
+      ]
+    },
+    orders: {
+      mount: "commerce", mode: "ro-rw", label: "orders", total: 34120, pk: "order_no", minWidth: 920,
+      etag: "sha256:c3f8a1d6e2b9c4f7a0d5e8b1c6f3a9d2e7b4c0f5a8d1e6b3c9f2a7d4e0b5c1f8",
+      defaultSort: { key: "ts", dir: "desc" },
+      filter: { key: "currency", label: "Moneda", all: "Todas" },
+      cols: [
+        { key: "order_no", label: "order_no", type: "integer", width: 96, align: "right" },
+        { key: "ts", label: "ts", type: "iso", width: 164 },
+        { key: "customer", label: "customer", type: "text", width: null },
+        { key: "total", label: "total", type: "real", width: 96, align: "right" },
+        { key: "currency", label: "currency", type: "text", width: 86 },
+        { key: "items", label: "items", type: "json", width: 190 },
+        { key: "shipped_at", label: "shipped_at", type: "iso", width: 164 }
+      ],
+      rows: [
+        { order_no: 104281, ts: "2026-11-20T14:12:00Z", customer: "marta.ruiz@example.com", total: 1284.5, currency: "EUR", items: [{ sku: "AC-220", qty: 2, price: 512.25 }, { sku: "AC-118", qty: 1, price: 260.0 }], shipped_at: "2026-11-18T10:12:00Z" },
+        { order_no: 104282, ts: "2026-11-20T13:48:00Z", customer: "leo.marin@example.com", total: 89.9, currency: "USD", items: [{ sku: "AC-044", qty: 3, price: 29.97 }], shipped_at: null },
+        { order_no: 104283, ts: "2026-11-20T13:20:00Z", customer: "ana.serra@example.com", total: 342.0, currency: "EUR", items: [{ sku: "AC-102", qty: 1, price: 342.0 }], shipped_at: "2026-11-19T08:30:00Z" },
+        { order_no: 104284, ts: "2026-11-20T12:55:00Z", customer: "noah.ferrer@example.com", total: 12.4, currency: "GBP", items: [{ sku: "AC-010", qty: 1, price: 12.4 }], shipped_at: null },
+        { order_no: 104285, ts: "2026-11-20T12:31:00Z", customer: "carla.vidal@example.com", total: 2940.0, currency: "EUR", items: [{ sku: "AC-900", qty: 1, price: 2450.0 }, { sku: "AC-220", qty: 1, price: 490.0 }], shipped_at: "2026-11-17T16:40:00Z" },
+        { order_no: 104286, ts: "2026-11-20T11:58:00Z", customer: "hugo.costa@example.com", total: 156.75, currency: "USD", items: [{ sku: "AC-077", qty: 5, price: 31.35 }], shipped_at: null },
+        { order_no: 104287, ts: "2026-11-20T11:24:00Z", customer: "irene.pardo@example.com", total: 48.0, currency: "EUR", items: [{ sku: "AC-031", qty: 2, price: 24.0 }], shipped_at: "2026-11-19T09:10:00Z" },
+        { order_no: 104288, ts: "2026-11-20T10:47:00Z", customer: "marc.solsona@example.com", total: 720.3, currency: "GBP", items: [{ sku: "AC-118", qty: 1, price: 260.0 }, { sku: "AC-140", qty: 2, price: 230.15 }], shipped_at: "2026-11-16T12:05:00Z" },
+        { order_no: 104289, ts: "2026-11-20T10:15:00Z", customer: "lucia.bonet@example.com", total: 35.2, currency: "EUR", items: [{ sku: "AC-010", qty: 2, price: 17.6 }], shipped_at: null },
+        { order_no: 104290, ts: "2026-11-20T09:42:00Z", customer: "pau.rovira@example.com", total: 1899.99, currency: "USD", items: [{ sku: "AC-900", qty: 1, price: 1899.99 }], shipped_at: "2026-11-18T07:55:00Z" },
+        { order_no: 104291, ts: "2026-11-20T09:08:00Z", customer: "nuria.camps@example.com", total: 64.0, currency: "EUR", items: [{ sku: "AC-031", qty: 1, price: 24.0 }, { sku: "AC-044", qty: 2, price: 20.0 }], shipped_at: "2026-11-19T11:20:00Z" },
+        { order_no: 104292, ts: "2026-11-20T08:36:00Z", customer: "jordi.vila@example.com", total: 410.1, currency: "EUR", items: [{ sku: "AC-102", qty: 1, price: 342.0 }, { sku: "AC-077", qty: 2, price: 34.05 }], shipped_at: "2026-11-18T14:45:00Z" },
+        { order_no: 104293, ts: "2026-11-20T08:02:00Z", customer: "sara.miro@example.com", total: 27.5, currency: "USD", items: [{ sku: "AC-010", qty: 1, price: 27.5 }], shipped_at: null },
+        { order_no: 104294, ts: "2026-11-20T07:30:00Z", customer: "toni.ferre@example.com", total: 5120.0, currency: "EUR", items: [{ sku: "AC-950", qty: 1, price: 4200.0 }, { sku: "AC-900", qty: 1, price: 920.0 }], shipped_at: "2026-11-15T10:00:00Z" }
+      ]
+    },
+    customers: {
+      mount: "commerce", mode: "ro-rw", label: "customers", total: 2940, pk: "id", minWidth: 900,
+      etag: "sha256:7e2b9f4c1a8d5e3b6c0f9a2d7e4b1c8f5a3d0e6b9c2f7a4d1e8b5c3f0a6d9e2b",
+      defaultSort: { key: "created_at", dir: "desc" },
+      filter: { key: "active", label: "Estado", all: "Todos", option: function (v) { return v === "true" ? "Activos" : "Inactivos"; } },
+      cols: [
+        { key: "id", label: "id", type: "uuid", width: 90 },
+        { key: "name", label: "name", type: "text", width: 136 },
+        { key: "email", label: "email", type: "text", width: 190 },
+        { key: "created_at", label: "created_at", type: "iso", width: 164 },
+        { key: "active", label: "active", type: "boolean", width: 76 },
+        { key: "avatar", label: "avatar", type: "blob", width: 112 },
+        { key: "metadata", label: "metadata", type: "json", width: 140 }
+      ],
+      rows: [
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d01", name: "Marta Ruiz", email: "marta.ruiz@example.com", created_at: "2026-11-18T09:15:00Z", active: true, avatar: { bytes: 4301 }, metadata: { tier: "gold", marketing: true, since: "2023-04-18" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d02", name: "Leo Marín", email: "leo.marin@example.com", created_at: "2026-11-17T16:40:00Z", active: true, avatar: null, metadata: { tier: "silver", marketing: false, since: "2024-01-09" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d03", name: "Ana Serra", email: "ana.serra@example.com", created_at: "2026-11-16T11:05:00Z", active: false, avatar: { bytes: 3891 }, metadata: { tier: "gold", marketing: true, since: "2022-11-30" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d04", name: "Noah Ferrer", email: "noah.ferrer@example.com", created_at: "2026-11-15T18:22:00Z", active: true, avatar: null, metadata: { tier: "basic", marketing: false, since: "2025-06-12" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d05", name: "Carla Vidal", email: "carla.vidal@example.com", created_at: "2026-11-14T12:50:00Z", active: true, avatar: null, metadata: { tier: "platinum", marketing: true, since: "2021-02-03" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d06", name: "Hugo Costa", email: "hugo.costa@example.com", created_at: "2026-11-13T08:30:00Z", active: true, avatar: { bytes: 11878 }, metadata: { tier: "silver", marketing: true, since: "2023-09-27" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d07", name: "Irene Pardo", email: "irene.pardo@example.com", created_at: "2026-11-12T15:12:00Z", active: false, avatar: null, metadata: { tier: "basic", marketing: false, since: "2025-10-05" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d08", name: "Marc Solsona", email: "marc.solsona@example.com", created_at: "2026-11-11T10:44:00Z", active: true, avatar: null, metadata: { tier: "gold", marketing: false, since: "2024-03-14" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d09", name: "Lucía Bonet", email: "lucia.bonet@example.com", created_at: "2026-11-10T17:06:00Z", active: true, avatar: { bytes: 2150 }, metadata: { tier: "silver", marketing: true, since: "2024-12-01" } },
+        { id: "019a4c21-0b11-7f01-8e01-3f4a5b6c7d0a", name: "Pau Rovira", email: "pau.rovira@example.com", created_at: "2026-11-09T09:58:00Z", active: false, avatar: null, metadata: { tier: "basic", marketing: false, since: "2025-07-19" } }
+      ]
+    }
+  };
+
+  var state = {
+    table: "observation",
+    q: "",
+    filter: "",
+    sort: { key: "ts", dir: "desc" },
+    selected: null,
+    loading: false,
+    hidden: {},
+    expanded: {},
+    openInspector: true
+  };
+
+  var LS_KEY = "dbai.ve.v1";
+  var root = document.documentElement;
+  var workspace = $("#workspace");
+  var thead = $("#thead");
+  var tbody = $("#tbody");
+  var grid = $("#grid");
+  var colMenu = $("#col-menu");
+  var qInput = $("#q");
+  var filterSelect = $("#filter");
+  var filterLabel = $("#filter-label");
+  var hexPop = $("#hex-pop");
+  var toastEl = $("#toast");
+  var toastTimer = 0;
+
+  /* ---------- preferencias (simulación de persistencia) ---------- */
+  function loadPrefs() {
+    try {
+      var p = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      if (p && typeof p === "object") {
+        if (p.hidden && typeof p.hidden === "object") state.hidden = p.hidden;
+        if (p.tree) setPanel("tree", p.tree, false);
+        if (p.insp) setPanel("insp", p.insp, false);
+        if (p.inspOpen === false) state.openInspector = false;
+      }
+    } catch (e) { /* sin persistencia: la maqueta sigue funcionando */ }
+  }
+  function savePrefs() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        hidden: state.hidden,
+        tree: Math.round(parseFloat(getComputedStyle(root).getPropertyValue("--tree-w"))),
+        insp: Math.round(parseFloat(getComputedStyle(root).getPropertyValue("--insp-w"))),
+        inspOpen: state.openInspector
+      }));
+    } catch (e) { /* sin persistencia */ }
+  }
+
+  /* ---------- utilidades de valor ---------- */
+  function jsonHtml(value, pretty) {
+    var src = JSON.stringify(value, null, pretty ? 2 : 0);
+    var out = "";
+    var last = 0;
+    var re = /("(?:\\.|[^"\\])*")\s*:|("(?:\\.|[^"\\])*")|\b(true|false)\b|\bnull\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    var m;
+    while ((m = re.exec(src))) {
+      out += esc(src.slice(last, m.index));
+      if (m[1] !== undefined) out += '<span class="j-key">' + esc(m[1]) + '</span><span class="j-punc">:</span>';
+      else if (m[2] !== undefined) out += '<span class="j-str">' + esc(m[2]) + '</span>';
+      else if (m[3] !== undefined) out += '<span class="j-bool">' + esc(m[3]) + '</span>';
+      else if (m[0] === "null") out += '<span class="j-null">null</span>';
+      else out += '<span class="j-num">' + esc(m[0]) + '</span>';
+      last = re.lastIndex;
+    }
+    out += esc(src.slice(last));
+    return out;
+  }
+  function blobSize(bytes) { return (bytes / 1024).toFixed(1) + " KB"; }
+  function blobChip(v, label) {
+    var size = blobSize(v.bytes);
+    return '<button type="button" class="blob-chip v-blob" data-hex="' + HEX_SEED + '" data-size="' + size + '" data-label="' + esc(label) + '" aria-label="BLOB ' + size + ', abrir vista hexadecimal">' + ICONS.blob + "BLOB " + size + "</button>";
+  }
+  function hexDump(lines, perLine) {
+    perLine = perLine || 8;
+    var bytes = HEX_SEED.replace(/\s+/g, "");
+    var out = [];
+    for (var i = 0; i < lines; i++) {
+      var chunk = bytes.slice(i * perLine * 2, (i + 1) * perLine * 2);
+      if (!chunk) break;
+      var pairs = chunk.match(/../g) || [];
+      var hexPart = pairs.join(" ");
+      while (hexPart.length < perLine * 3 - 1) hexPart += " ";
+      var ascii = pairs.map(function (h) {
+        var n = parseInt(h, 16);
+        return n >= 32 && n < 127 ? String.fromCharCode(n) : ".";
+      }).join("");
+      out.push(("0000000" + (i * perLine).toString(16)).slice(-8) + "  " + hexPart + "  |" + ascii + "|");
+    }
+    return esc(out.join("\n"));
+  }
+  function cellValue(col, row, expanded) {
+    var v = row[col.key];
+    if (v === null || v === undefined) return '<span class="v-null" title="NULL">∅</span>';
+    switch (col.type) {
+      case "json": return '<span class="v-json">' + jsonHtml(v, false) + "</span>";
+      case "blob": return blobChip(v, col.label);
+      case "boolean": return '<span class="v-bool ' + (v ? "v-true" : "v-false") + '">' + v + "</span>";
+      case "real": return '<span class="v-num">' + fmtReal.format(v) + "</span>";
+      case "integer": return '<span class="v-num">' + fmtInt.format(v) + "</span>";
+      case "iso": return '<span class="v-date">' + esc(v) + "</span>";
+      case "enum": return '<span class="badge badge-' + esc(slug(v)) + '">' + esc(v) + "</span>";
+      case "uuid": return '<span class="v-uuid" title="' + esc(v) + '">' + esc(shortId(v)) + "</span>";
+      default:
+        var text = String(v);
+        if (text.length > 150) {
+          return '<span class="v-text expandable" role="button" tabindex="0" data-expand data-exp-key="' + esc(expandKey(row, col)) + '" aria-expanded="' + (expanded ? "true" : "false") + '" title="' + (expanded ? "Clic para contraer" : "Clic para expandir") + '">' + esc(text) + "</span>";
+        }
+        return '<span class="v-text">' + esc(text) + "</span>";
+    }
+  }
+  function expandKey(row, col) {
+    return state.table + "|" + String(row[tableDef().pk]) + "|" + col.key;
+  }
+  function cellTd(col, row) {
+    var cls = [];
+    if (col.align === "right") cls.push("num");
+    if (col.type === "text") cls.push("text-cell");
+    var exp = !!state.expanded[expandKey(row, col)];
+    if (exp) cls.push("is-expanded");
+    return '<td class="' + cls.join(" ") + '">' + cellValue(col, row, exp) + "</td>";
+  }
+
+  /* ---------- consulta de filas ---------- */
+  function tableDef() { return TABLES[state.table]; }
+  function hiddenFor(id) { return state.hidden[id] || []; }
+  function visibleCols() {
+    var hidden = hiddenFor(state.table);
+    return tableDef().cols.filter(function (c) { return hidden.indexOf(c.key) === -1; });
+  }
+  function searchText(row) {
+    var parts = [];
+    Object.keys(row).forEach(function (k) {
+      var v = row[k];
+      parts.push(v === null || v === undefined ? "null" : (typeof v === "object" ? JSON.stringify(v) : String(v)));
+    });
+    return parts.join(" ");
+  }
+  function rowsFor() {
+    var t = tableDef();
+    var rows = t.rows.slice();
+    var q = norm(state.q.trim());
+    if (q) rows = rows.filter(function (r) { return norm(searchText(r)).indexOf(q) !== -1; });
+    if (state.filter) {
+      rows = rows.filter(function (r) { return String(r[t.filter.key]) === state.filter; });
+    }
+    var col = t.cols.filter(function (c) { return c.key === state.sort.key; })[0];
+    if (col) {
+      var dir = state.sort.dir === "asc" ? 1 : -1;
+      rows.sort(function (a, b) {
+        var av = a[col.key], bv = b[col.key];
+        if (av === null || av === undefined) return bv === null || bv === undefined ? 0 : 1;
+        if (bv === null || bv === undefined) return -1;
+        var r;
+        if (col.type === "real" || col.type === "integer") r = av - bv;
+        else if (col.type === "boolean") r = (av ? 1 : 0) - (bv ? 1 : 0);
+        else if (col.type === "json") r = JSON.stringify(av).localeCompare(JSON.stringify(bv), "es");
+        else r = String(av).localeCompare(String(bv), "es");
+        return r * dir;
+      });
+    }
+    return rows;
+  }
+  function rowByPk(pk) {
+    var t = tableDef();
+    return t.rows.filter(function (r) { return String(r[t.pk]) === String(pk); })[0] || null;
+  }
+  function pathFor(row) {
+    var t = tableDef();
+    return "/" + t.mount + "/" + t.label + (row ? "/" + row[t.pk] : "");
+  }
+
+  /* ---------- cabecera, filas, paginación ---------- */
+  function renderHead() {
+    var cols = visibleCols();
+    thead.innerHTML = "<tr>" + cols.map(function (c) {
+      var active = state.sort.key === c.key;
+      var aria = active ? (state.sort.dir === "asc" ? "ascending" : "descending") : "none";
+      return '<th scope="col" class="' + (c.align === "right" ? "num" : "") + '" style="width:' + (c.width ? c.width + "px" : "auto") + '" aria-sort="' + aria + '">' +
+        '<button type="button" class="th-btn" data-sort="' + c.key + '" title="Ordenar por ' + esc(c.label) + '">' +
+        "<span>" + esc(c.label) + '</span><span class="sort" aria-hidden="true">' + (active ? (state.sort.dir === "asc" ? "↑" : "↓") : "↕") + "</span>" +
+        "</button></th>";
+    }).join("") + "</tr>";
+  }
+
+  function renderBody() {
+    var t = tableDef();
+    var cols = visibleCols();
+    var rows = rowsFor();
+    var html = "";
+    if (state.loading) {
+      html += '<tr class="skeleton-row" aria-hidden="true">' + cols.map(function (c, i) {
+        var w = [64, 82, 52, 94, 70, 46, 38][i % 7];
+        return '<td><span class="sk" style="width:' + w + '%"></span></td>';
+      }).join("") + "</tr>";
+    }
+    if (!rows.length) {
+      html += '<tr><td class="empty" colspan="' + cols.length + '">Sin coincidencias en las 25 filas cargadas. <button type="button" data-clear>Limpiar búsqueda</button></td></tr>';
+    } else {
+      html += rows.map(function (r) {
+        var pk = String(r[t.pk]);
+        var sel = String(state.selected) === pk;
+        return '<tr data-id="' + esc(pk) + '" tabindex="0" class="' + (sel ? "is-selected" : "") + '"' + (sel ? ' aria-current="true"' : "") + ">" +
+          cols.map(function (c) { return cellTd(c, r); }).join("") + "</tr>";
+      }).join("");
+    }
+    tbody.innerHTML = html;
+    grid.style.minWidth = t.minWidth + "px";
+    renderPagination();
+    renderStatus();
+  }
+
+  function renderPagination() {
+    var t = tableDef();
+    var rows = rowsFor();
+    var range = $("#page-range");
+    if (state.q.trim() || state.filter) {
+      range.textContent = "1–" + rows.length + " de " + rows.length + " · filtrado";
+    } else if (rows.length === 0) {
+      range.textContent = "0 de " + fmt(t.total);
+    } else {
+      range.textContent = "1–" + rows.length + " de " + fmt(t.total);
+    }
+  }
+
+  function renderStatus() {
+    var t = tableDef();
+    var row = rowByPk(state.selected);
+    var rows = rowsFor();
+    var pathEl = $("#status-path span");
+    pathEl.textContent = pathFor(row);
+    pathEl.parentNode.title = pathFor(row);
+    $("#status-rows").textContent = state.loading ? "Cargando…" : rows.length + " de " + fmt(t.total) + " filas";
+    $("#status-cols").textContent = visibleCols().length + "/" + t.cols.length + " columnas";
+    $("#status-mode").textContent = t.mount + " · " + t.mode;
+    var ro = $("#ro-item");
+    ro.title = t.mode === "ro-rw"
+      ? "El montaje es ro-rw, pero el explorador no escribe en ninguna base"
+      : "El montaje es ro y el explorador tampoco escribe";
+    var etag = t.etag;
+    $("#status-etag").textContent = "ETag " + etag.slice(0, 13) + "…";
+    $("#status-etag").title = etag;
+    $("#meta-rows").textContent = fmt(t.total);
+    $("#meta-cols").textContent = t.cols.length;
+    $("#meta-mount").textContent = t.mount;
+    $("#meta-mode").textContent = t.mode;
+    $("#table-title").textContent = t.label;
+    $("#table-caption").textContent = "Registros de " + t.label + " en el montaje " + t.mount;
+    $("#load-toggle").setAttribute("aria-pressed", state.loading ? "true" : "false");
+  }
+
+  /* ---------- breadcrumb, árbol, tabla ---------- */
+  function renderCrumbs() {
+    var t = tableDef();
+    var row = rowByPk(state.selected);
+    var el = $("#crumbs");
+    var html = '<button type="button" class="crumb" data-crumb="mount">/' + esc(t.mount) + "</button>" +
+      '<span class="crumb-sep" aria-hidden="true">/</span>' +
+      '<button type="button" class="crumb' + (!row ? " current" : "") + '" data-crumb="table">' + esc(t.label) + "</button>";
+    if (row) {
+      var pk = String(row[t.pk]);
+      html += '<span class="crumb-sep" aria-hidden="true">/</span><span class="crumb record current" title="' + esc(pk) + '">' + esc(shortId(pk)) + "</span>";
+    }
+    el.innerHTML = html;
+  }
+
+  function renderTree() {
+    $$("[data-table-node]").forEach(function (btn) {
+      var on = btn.getAttribute("data-table-node") === state.table;
+      btn.setAttribute("aria-current", on ? "true" : "false");
+    });
+  }
+
+  function renderInspector() {
+    var t = tableDef();
+    var row = rowByPk(state.selected);
+    var body = $("#inspector-body");
+    $("#insp-pk").textContent = row ? shortId(String(row[t.pk])) : "";
+    if (!row) {
+      body.innerHTML = '<p class="insp-empty">Selecciona una fila de la tabla para inspeccionar sus campos.</p>';
+      return;
+    }
+    var html = '<div class="insp-path">' + esc(pathFor(row)) + "</div>";
+    var badges = "";
+    if (row.kind) badges += '<span class="badge badge-' + esc(slug(row.kind)) + '">' + esc(row.kind) + "</span>";
+    if (row.currency) badges += '<span class="badge badge-muted">' + esc(row.currency) + "</span>";
+    if (row.active !== undefined) badges += '<span class="badge badge-muted">' + (row.active ? "activo" : "inactivo") + "</span>";
+    if (badges) html += '<div class="insp-badges">' + badges + "</div>";
+    html += t.cols.map(function (c) {
+      var v = row[c.key];
+      var val;
+      if (v === null || v === undefined) {
+        val = '<span class="v-null">∅ NULL</span>';
+      } else if (c.type === "json") {
+        val = '<pre class="json-block">' + jsonHtml(v, true) + "</pre>";
+      } else if (c.type === "blob") {
+        val = blobChip(v, c.label) + '<pre class="hex-block">' + hexDump(4, 6) + "</pre>";
+      } else if (c.type === "boolean") {
+        val = '<span class="v-bool ' + (v ? "v-true" : "v-false") + '">' + v + "</span>";
+      } else if (c.type === "real") {
+        val = '<span class="v-num">' + fmtReal.format(v) + "</span>";
+      } else if (c.type === "integer") {
+        val = '<span class="v-num">' + fmtInt.format(v) + "</span>";
+      } else if (c.type === "enum") {
+        val = '<span class="badge badge-' + esc(slug(v)) + '">' + esc(v) + "</span>";
+      } else {
+        val = '<span class="fv">' + esc(String(v)) + "</span>";
+      }
+      return '<div class="field"><div class="field-top">' +
+        '<span class="field-name">' + esc(c.label) + '</span>' +
+        '<span class="type-pill">' + typeLabel(c.type) + "</span>" +
+        '<button type="button" class="copy-field" data-copy-field="' + c.key + '" aria-label="Copiar ' + esc(c.label) + '" title="Copiar valor">' + ICONS.copy + "</button>" +
+        '</div><div class="field-value">' + val + "</div></div>";
+    }).join("");
+    body.innerHTML = html;
+  }
+
+  function selectRow(pk, focusRow) {
+    state.selected = String(pk);
+    renderBody();
+    renderCrumbs();
+    renderInspector();
+    if (focusRow) {
+      var tr = tbody.querySelector('tr[data-id="' + String(pk).replace(/"/g, '\\"') + '"]');
+      if (tr) tr.focus();
+    }
+  }
+
+  function buildFilter() {
+    var t = tableDef();
+    var f = t.filter;
+    if (!f) {
+      filterSelect.parentNode.style.display = "none";
+      state.filter = "";
+      return;
+    }
+    filterSelect.parentNode.style.display = "";
+    filterLabel.textContent = f.label;
+    var values = [];
+    t.rows.forEach(function (r) {
+      var v = r[f.key];
+      if (v !== null && v !== undefined && values.indexOf(String(v)) === -1) values.push(String(v));
+    });
+    filterSelect.innerHTML = '<option value="">' + esc(f.all) + "</option>" + values.map(function (v) {
+      return '<option value="' + esc(v) + '">' + esc(f.option ? f.option(v) : v) + "</option>";
+    }).join("");
+    filterSelect.value = state.filter;
+  }
+
+  function buildColMenu() {
+    var t = tableDef();
+    var hidden = hiddenFor(state.table);
+    colMenu.innerHTML = '<div class="col-menu-head">Columnas<span><button type="button" data-cols-all>Mostrar todas</button></span></div>' +
+      t.cols.map(function (c) {
+        return '<label class="col-row"><input type="checkbox" data-col="' + c.key + '"' + (hidden.indexOf(c.key) === -1 ? " checked" : "") + "><span>" + esc(c.label) + '</span><span class="t">' + typeLabel(c.type) + "</span></label>";
+      }).join("");
+  }
+
+  function setTable(id) {
+    var t = TABLES[id];
+    if (!t) return;
+    state.table = id;
+    state.q = "";
+    state.filter = "";
+    state.sort = { key: t.defaultSort.key, dir: t.defaultSort.dir };
+    qInput.value = "";
+    qInput.placeholder = "Buscar en /" + t.mount + "/" + t.label;
+    buildFilter();
+    buildColMenu();
+    var first = rowsFor()[0];
+    state.selected = first ? String(first[t.pk]) : null;
+    renderTree();
+    renderHead();
+    renderBody();
+    renderCrumbs();
+    renderInspector();
+    closeColMenu();
+  }
+
+  /* ---------- interacción ---------- */
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 1600);
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  async function copyText(text, okMsg) {
+    var ok = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        ok = await Promise.race([
+          navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; }),
+          new Promise(function (resolve) { setTimeout(function () { resolve(false); }, 500); })
+        ]);
+      }
+    } catch (e) { ok = false; }
+    if (!ok) ok = legacyCopy(text);
+    toast(ok ? (okMsg || "Copiado") : "No se pudo copiar al portapapeles");
+    return ok;
+  }
+
+  function openHex(btn) {
+    var size = btn.getAttribute("data-size") || "BLOB";
+    var label = btn.getAttribute("data-label") || "blob";
+    $("#hex-title").textContent = label;
+    $("#hex-size").textContent = "BLOB " + size;
+    $("#hex-body").innerHTML = hexDump(6);
+    hexPop.hidden = false;
+    var r = btn.getBoundingClientRect();
+    var w = 352;
+    var inspector = document.querySelector(".inspector");
+    var limit = inspector && getComputedStyle(inspector).display !== "none" ? inspector.getBoundingClientRect().left : window.innerWidth;
+    var left = r.right + 8;
+    if (left + w > limit - 6) left = r.left - w - 8;
+    if (left < 8) left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + 6;
+    if (top + 230 > window.innerHeight - 8) top = Math.max(8, r.top - 236);
+    hexPop.style.left = left + "px";
+    hexPop.style.top = top + "px";
+  }
+  function closeHex() { hexPop.hidden = true; }
+
+  function toggleExpand(el) {
+    var key = el.getAttribute("data-exp-key");
+    var tr = el.closest("tr[data-id]");
+    if (!key || !tr) return;
+    var hadFocus = document.activeElement === el;
+    if (state.expanded[key]) delete state.expanded[key];
+    else state.expanded[key] = true;
+    selectRow(tr.getAttribute("data-id"));
+    if (hadFocus) {
+      var next = tbody.querySelector('[data-exp-key="' + key.replace(/"/g, '\\"') + '"]');
+      if (next) next.focus();
+    }
+  }
+
+  function closeColMenu() {
+    colMenu.hidden = true;
+    $("#columns-btn").setAttribute("aria-expanded", "false");
+  }
+
+  function setLoading(on) {
+    state.loading = on;
+    renderBody();
+  }
+
+  /* ---------- paneles ---------- */
+  function panelWidth(kind) {
+    return parseFloat(getComputedStyle(root).getPropertyValue(kind === "tree" ? "--tree-w" : "--insp-w")) || (kind === "tree" ? 200 : 288);
+  }
+  function setPanel(kind, width, persist) {
+    var min = kind === "tree" ? 168 : 248;
+    var max = kind === "tree" ? 320 : 460;
+    var val = Math.min(max, Math.max(min, Math.round(width)));
+    root.style.setProperty(kind === "tree" ? "--tree-w" : "--insp-w", val + "px");
+    var el = $("#" + (kind === "tree" ? "split-left" : "split-right"));
+    el.setAttribute("aria-valuenow", String(val));
+    if (persist) savePrefs();
+  }
+  function initSplitter(el, kind) {
+    var startX = 0, startW = 0, dragging = false;
+    el.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      dragging = true;
+      startX = e.clientX;
+      startW = panelWidth(kind);
+      el.setPointerCapture(e.pointerId);
+      document.body.classList.add("resizing");
+      e.preventDefault();
+    });
+    el.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - startX;
+      setPanel(kind, kind === "tree" ? startW + dx : startW - dx, false);
+    });
+    function stop(e) {
+      if (!dragging) return;
+      dragging = false;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      document.body.classList.remove("resizing");
+      setPanel(kind, panelWidth(kind), true);
+    }
+    el.addEventListener("pointerup", stop);
+    el.addEventListener("pointercancel", stop);
+    el.addEventListener("keydown", function (e) {
+      var d = 0;
+      if (e.key === "ArrowLeft") d = -8;
+      if (e.key === "ArrowRight") d = 8;
+      if (!d) return;
+      e.preventDefault();
+      setPanel(kind, panelWidth(kind) + (kind === "tree" ? d : -d), true);
+    });
+  }
+  function setInspector(open) {
+    state.openInspector = open;
+    workspace.classList.toggle("rail-mode", !open);
+    $("#collapse-inspector").setAttribute("aria-expanded", open ? "true" : "false");
+    savePrefs();
+  }
+
+  /* ---------- eventos ---------- */
+  thead.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-sort]");
+    if (!b) return;
+    var key = b.getAttribute("data-sort");
+    if (state.sort.key === key) state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+    else state.sort = { key: key, dir: "asc" };
+    renderHead();
+    renderBody();
+  });
+
+  tbody.addEventListener("click", function (e) {
+    var blob = e.target.closest(".blob-chip");
+    if (blob) { openHex(blob); return; }
+    var exp = e.target.closest("[data-expand]");
+    if (exp) { toggleExpand(exp); return; }
+    var clear = e.target.closest("[data-clear]");
+    if (clear) {
+      state.q = "";
+      qInput.value = "";
+      renderBody();
+      return;
+    }
+    var tr = e.target.closest("tr[data-id]");
+    if (tr) selectRow(tr.getAttribute("data-id"));
+  });
+
+  tbody.addEventListener("keydown", function (e) {
+    var tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      var next = e.key === "ArrowDown" ? tr.nextElementSibling : tr.previousElementSibling;
+      if (next && next.matches("tr[data-id]")) selectRow(next.getAttribute("data-id"), true);
+    } else if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-expand]")) {
+      e.preventDefault();
+      toggleExpand(e.target);
+    } else if (e.key === "Enter" && e.target === tr) {
+      selectRow(tr.getAttribute("data-id"), true);
+    }
+  });
+
+  $("#inspector-body").addEventListener("click", async function (e) {
+    var blob = e.target.closest(".blob-chip");
+    if (blob) { openHex(blob); return; }
+    var btn = e.target.closest("[data-copy-field]");
+    if (!btn) return;
+    var t = tableDef();
+    var row = rowByPk(state.selected);
+    if (!row) return;
+    var key = btn.getAttribute("data-copy-field");
+    var v = row[key];
+    var text = v === null || v === undefined ? "NULL" : (typeof v === "object" ? JSON.stringify(v, null, 2) : String(v));
+    var ok = await copyText(text, key + " copiado");
+    if (ok) {
+      btn.classList.add("ok");
+      setTimeout(function () { btn.classList.remove("ok"); }, 1100);
+    }
+  });
+
+  $$("[data-mount]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var open = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", open ? "false" : "true");
+      var nodes = document.getElementById(btn.getAttribute("aria-controls"));
+      if (nodes) nodes.hidden = open;
+    });
+  });
+
+  $$("[data-table-node]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setTable(btn.getAttribute("data-table-node"));
+    });
+  });
+
+  $("#crumbs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-crumb]");
+    if (!b) return;
+    if (b.getAttribute("data-crumb") === "mount") {
+      var t = tableDef();
+      var first = Object.keys(TABLES).filter(function (id) { return TABLES[id].mount === t.mount; })[0];
+      if (first && first !== state.table) setTable(first);
+      else toast("/" + t.mount + " · " + fmt(TABLES[first].total) + " filas en la primera tabla");
+    } else if (b.getAttribute("data-crumb") === "table") {
+      renderBody();
+      renderCrumbs();
+    }
+  });
+
+  qInput.addEventListener("input", function () {
+    state.q = qInput.value;
+    var rows = rowsFor();
+    if (rows.length && !rows.some(function (r) { return String(r[tableDef().pk]) === String(state.selected); })) {
+      state.selected = String(rows[0][tableDef().pk]);
+      renderInspector();
+      renderCrumbs();
+    }
+    renderBody();
+  });
+
+  filterSelect.addEventListener("change", function () {
+    state.filter = filterSelect.value;
+    var rows = rowsFor();
+    if (rows.length) {
+      state.selected = String(rows[0][tableDef().pk]);
+      renderInspector();
+      renderCrumbs();
+    }
+    renderBody();
+  });
+
+  $("#columns-btn").addEventListener("click", function () {
+    var open = colMenu.hidden;
+    colMenu.hidden = !open;
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) buildColMenu();
+  });
+
+  colMenu.addEventListener("change", function (e) {
+    var cb = e.target.closest("[data-col]");
+    if (!cb) return;
+    var key = cb.getAttribute("data-col");
+    var list = hiddenFor(state.table).slice();
+    var idx = list.indexOf(key);
+    if (cb.checked && idx !== -1) list.splice(idx, 1);
+    if (!cb.checked && idx === -1) list.push(key);
+    if (state.table && TABLES[state.table].cols.length - list.length < 1) {
+      cb.checked = true;
+      toast("Debe quedar al menos una columna visible");
+      return;
+    }
+    state.hidden[state.table] = list;
+    savePrefs();
+    renderHead();
+    renderBody();
+  });
+
+  colMenu.addEventListener("click", function (e) {
+    if (!e.target.closest("[data-cols-all]")) return;
+    state.hidden[state.table] = [];
+    savePrefs();
+    buildColMenu();
+    renderHead();
+    renderBody();
+  });
+
+  $("#refresh").addEventListener("click", function () {
+    if (state.loading) return;
+    setLoading(true);
+    setTimeout(function () {
+      setLoading(false);
+      toast("Vista actualizada · ETag vigente");
+    }, 700);
+  });
+
+  $("#copy-path").addEventListener("click", function () {
+    copyText(pathFor(rowByPk(state.selected)), "Ruta copiada");
+  });
+
+  $("#load-toggle").addEventListener("click", function () {
+    setLoading(!state.loading);
+  });
+
+  $("#collapse-inspector").addEventListener("click", function () { setInspector(false); });
+  $("#expand-inspector").addEventListener("click", function () { setInspector(true); });
+
+  $("#hex-close").addEventListener("click", closeHex);
+
+  document.addEventListener("click", function (e) {
+    if (!colMenu.hidden && !e.target.closest("#col-menu") && !e.target.closest("#columns-btn")) closeColMenu();
+    if (!hexPop.hidden && !e.target.closest("#hex-pop") && !e.target.closest(".blob-chip")) closeHex();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      if (!hexPop.hidden) closeHex();
+      if (!colMenu.hidden) closeColMenu();
+    }
+    if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+      e.preventDefault();
+      qInput.focus();
+    }
+  });
+
+  window.addEventListener("resize", function () {
+    if (!hexPop.hidden) closeHex();
+  });
+  $("#table-scroll").addEventListener("scroll", function () {
+    if (!hexPop.hidden) closeHex();
+    if (!colMenu.hidden) closeColMenu();
+  });
+
+  /* ---------- notas y retorno a la conversación ---------- */
+  var dialog = $("#notes");
+  $("#open-notes").addEventListener("click", function () { dialog.showModal(); });
+  $("#close-notes").addEventListener("click", function () { dialog.close(); });
+  $("#notes-ok").addEventListener("click", function () { dialog.close(); });
+
+  function promptText() {
+    var t = tableDef();
+    var cols = visibleCols().map(function (c) { return c.key; });
+    return "Maqueta db-ai Visual Explorer revisada. Estado: /" + t.mount + "/" + t.label +
+      " · orden " + state.sort.key + " " + state.sort.dir +
+      " · filtro " + (state.filter ? t.filter.label + "=" + state.filter : "ninguno") +
+      " · búsqueda " + (state.q ? "\"" + state.q + "\"" : "vacía") +
+      " · columnas visibles " + cols.join(", ") +
+      " · inspector " + (state.openInspector ? "abierto" : "plegado") +
+      " · árbol " + Math.round(panelWidth("tree")) + " px · inspector " + Math.round(panelWidth("insp")) + " px." +
+      " Ajustes que pido: ";
+  }
+  $("#copy-state").addEventListener("click", async function () {
+    var ok = await copyText(promptText(), "Estado copiado como prompt");
+    if (ok) {
+      var b = this;
+      b.classList.add("ok");
+      var old = b.textContent;
+      b.textContent = "Copiado";
+      setTimeout(function () { b.textContent = old; b.classList.remove("ok"); }, 1200);
+    }
+  });
+
+  /* ---------- arranque ---------- */
+  loadPrefs();
+  initSplitter($("#split-left"), "tree");
+  initSplitter($("#split-right"), "insp");
+  setInspector(state.openInspector);
+  buildFilter();
+  buildColMenu();
+  var initial = rowsFor()[0];
+  state.selected = initial ? String(initial[TABLES.observation.pk]) : null;
+  renderTree();
+  renderHead();
+  renderBody();
+  renderCrumbs();
+  renderInspector();
+})();
+</script>
+</body>
+</html>

@@ -28,11 +28,17 @@ dist/
 **/node_modules/
 
 # --- Estado local de herramientas de IA ---------------------------------------
-.agent-memory/
+#.agent-memory/
+# Versionado fino (decidido 2026-11-21): se versiona solo la base memory.db; los
+# marcadores de acm-forms/ son estado efímero de idempotencia y los db-wal/db-shm
+# son estados de SQLite.
+.agent-memory/acm-forms/
+.agent-memory/*.db-wal
+.agent-memory/*.db-shm
 .atl/
 .codegraph/
 .engram/
-.explanations/
+#.explanations/
 .impeccable/
 .pi/
 .playwright-cli/
