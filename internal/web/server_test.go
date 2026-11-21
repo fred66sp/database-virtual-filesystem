@@ -135,9 +135,13 @@ func TestStaticAssets(t *testing.T) {
 		ctype    string
 		contains []string
 	}{
-		{"/", "text/html; charset=utf-8", []string{"db-ai Visual Explorer", `rel="icon"`, "data:image/svg+xml;base64,"}},
-		{"/app.js", "text/javascript; charset=utf-8", []string{"Vue.createApp"}},
-		{"/styles.css", "text/css; charset=utf-8", []string{"--fs-body"}},
+		{"/", "text/html; charset=utf-8", []string{"db-ai Visual Explorer", `rel="icon"`, "data:image/svg+xml;base64,", "Grafo ACM"}},
+		{"/app.js", "text/javascript; charset=utf-8", []string{"Vue.createApp", "/vendor/force-graph.min.js", "./acm-graph-data.js"}},
+		{"/styles.css", "text/css; charset=utf-8", []string{"--fs-body", ".graph-view"}},
+		{"/acm-graph-data.js", "text/javascript; charset=utf-8", []string{"export", "loadAcmGraph", "expandAcmGraph"}},
+		{"/vendor/force-graph.min.js", "text/javascript; charset=utf-8", []string{"Version 1.52.0 force-graph", "ForceGraph"}},
+		{"/vendor/force-graph.LICENSE.txt", "text/plain; charset=utf-8", []string{"MIT License", "Vasco Asturiano"}},
+		{"/vendor/force-graph.README.md", "text/markdown; charset=utf-8", []string{"force-graph@1.52.0", "sha512-0fpxrZzW6qwm9zM7wgh54d7GbxQfQSDV71I0apo+75PVYQPpPHGVPQFLsE9WAu+hOS4VdLd53g0Hua/bxDJKSg=="}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
