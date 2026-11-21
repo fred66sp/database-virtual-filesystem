@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"sync"
@@ -121,6 +122,50 @@ func TestServeLifecycle(t *testing.T) {
 		t.Fatalf("rebind %s after shutdown: %v (listener not released)", base, err)
 	}
 	_ = ln.Close()
+}
+
+// TestStaticAssets checks that the explorer's static files travel inside the
+// binary and are served with their declared type and the nosniff header.
+func TestStaticAssets(t *testing.T) {
+	srv := httptest.NewServer(NewHandler(newTestService(t), echoRespond))
+	defer srv.Close()
+
+	cases := []struct {
+		path     string
+		ctype    string
+		contains []string
+	}{
+		{"/", "text/html; charset=utf-8", []string{"db-ai Visual Explorer", `rel="icon"`, "data:image/svg+xml;base64,"}},
+		{"/app.js", "text/javascript; charset=utf-8", []string{"Vue.createApp"}},
+		{"/styles.css", "text/css; charset=utf-8", []string{"--fs-body"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			resp, err := http.Get(srv.URL + tc.path)
+			if err != nil {
+				t.Fatalf("GET %s: %v", tc.path, err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil {
+				t.Fatalf("read %s: %v", tc.path, err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("GET %s status = %d, want 200", tc.path, resp.StatusCode)
+			}
+			if got := resp.Header.Get("Content-Type"); got != tc.ctype {
+				t.Errorf("GET %s Content-Type = %q, want %q", tc.path, got, tc.ctype)
+			}
+			if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Errorf("GET %s X-Content-Type-Options = %q, want nosniff", tc.path, got)
+			}
+			for _, want := range tc.contains {
+				if !bytes.Contains(body, []byte(want)) {
+					t.Errorf("GET %s body does not contain %q", tc.path, want)
+				}
+			}
+		})
+	}
 }
 
 func TestServeRequiresResponder(t *testing.T) {

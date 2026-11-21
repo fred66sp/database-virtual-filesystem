@@ -39,7 +39,148 @@ function jsonTokens(src) {
   return out;
 }
 
-Vue.createApp({
+/* ---------- tooltips: single delegated manager ---------- */
+const TIPS = Object.freeze({
+  mounts: "Una base de datos montada: el punto de entrada para explorar sus tablas y registros.",
+  tree: "Explora los montajes, sus tablas y las primeras filas. La tabla que elijas se abre en el panel principal.",
+  path: "Dirección de un recurso dentro del sistema de archivos virtual: montaje, tabla, registro y campo. Puedes copiarla para usarla en la CLI.",
+  readOnly: "Puedes consultar y explorar los datos, pero esta interfaz no permite modificarlos.",
+  grep: "Busca el texto tal cual, con distinción de mayúsculas, en las columnas de texto. No interpreta comodines ni expresiones.",
+  filters: "Combina columna, operador y valor. Varios filtros se suman con AND. El valor se interpreta como JSON y, si no lo es, como texto.",
+  sort: "Ordena por la columna elegida: el primer clic asciende, el segundo desciende y el tercero quita el orden. Los NULL van al final.",
+  columns: "Muestra u oculta columnas de la tabla. La preferencia se guarda por tabla.",
+  paging: "Avanza o retrocede por bloques de registros mediante un cursor firmado. No es una foto fija: los cambios concurrentes pueden afectar al recorrido.",
+  inspector: "Muestra todos los campos del registro seleccionado, con su tipo y su valor completo.",
+  noPk: "La tabla puede consultarse, pero sus registros no tienen una identidad compatible con la navegación individual por rutas; la paginación se limita a la primera página.",
+  etag: "Identificador de una versión concreta del contenido de una fila. Permite detectar si ha cambiado entre consultas.",
+  nullValue: "Valor ausente o desconocido. No es lo mismo que una cadena vacía ni que cero.",
+  blob: "Datos binarios. La interfaz muestra su tamaño y permite copiarlos en base64.",
+  copyPath: "Copia la ruta virtual del recurso seleccionado, lista para usar en la CLI.",
+  refresh: "Vuelve a consultar los datos de la vista actual.",
+  help: "Abre la ayuda: cómo empezar, navegación básica, búsqueda, filtros, inspector y conceptos.",
+});
+
+const tipState = {
+  el: null,
+  anchor: null,
+  describedBy: null,
+  origin: null,
+  show(anchor, origin) {
+    const text = anchor.getAttribute("data-tip");
+    if (!text || !this.el) return;
+    if (this.anchor === anchor && this.el.classList.contains("show")) {
+      if (origin) this.origin = origin;
+      return;
+    }
+    this.hide();
+    this.anchor = anchor;
+    this.origin = origin || "hover";
+    this.describedBy = anchor.getAttribute("aria-describedby");
+    anchor.setAttribute("aria-describedby", "dbai-tip");
+    this.el.textContent = text;
+    this.el.removeAttribute("aria-hidden");
+    this.el.classList.add("show");
+    this.place();
+  },
+  place() {
+    if (!this.anchor || !this.el) return;
+    const a = this.anchor.getBoundingClientRect();
+    const w = this.el.offsetWidth;
+    const h = this.el.offsetHeight;
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    let top = a.top - h - 6;
+    if (top < 8) top = a.bottom + 6;
+    top = Math.max(8, Math.min(top, vh - h - 8));
+    let left = a.left + (a.width - w) / 2;
+    left = Math.max(8, Math.min(left, vw - w - 8));
+    this.el.style.top = Math.round(top) + "px";
+    this.el.style.left = Math.round(left) + "px";
+  },
+  hide() {
+    if (!this.anchor) return;
+    if (this.describedBy === null) this.anchor.removeAttribute("aria-describedby");
+    else this.anchor.setAttribute("aria-describedby", this.describedBy);
+    this.anchor = null;
+    this.describedBy = null;
+    this.origin = null;
+    this.el.classList.remove("show");
+    this.el.setAttribute("aria-hidden", "true");
+  },
+};
+
+function setTip(el, value) {
+  const text = value == null ? "" : String(value).trim();
+  if (text) el.setAttribute("data-tip", text);
+  else el.removeAttribute("data-tip");
+}
+
+const tipDirective = {
+  mounted(el, binding) { setTip(el, binding.value); },
+  updated(el, binding) {
+    if (binding.value === binding.oldValue) return;
+    setTip(el, binding.value);
+    if (tipState.anchor === el && tipState.el && tipState.el.classList.contains("show")) {
+      tipState.el.textContent = binding.value == null ? "" : String(binding.value);
+      tipState.place();
+    }
+  },
+  beforeUnmount(el) { el.removeAttribute("data-tip"); },
+};
+
+function initTooltips() {
+  tipState.el = document.getElementById("dbai-tip");
+  if (!tipState.el) return;
+  const anchorOf = (target) => (target && target.closest ? target.closest("[data-tip]") : null);
+
+  document.addEventListener("pointerover", (event) => {
+    if (event.pointerType !== "mouse") return;
+    const anchor = anchorOf(event.target);
+    if (anchor) tipState.show(anchor, "hover");
+  });
+
+  document.addEventListener("pointerout", (event) => {
+    if (event.pointerType !== "mouse") return;
+    const anchor = anchorOf(event.target);
+    if (!anchor || tipState.anchor !== anchor) return;
+    if (event.relatedTarget && anchor.contains(event.relatedTarget)) return;
+    tipState.hide();
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const anchor = anchorOf(event.target);
+    if (anchor) tipState.show(anchor, "focus");
+  });
+
+  document.addEventListener("focusout", (event) => {
+    const anchor = anchorOf(event.target);
+    if (!anchor || tipState.anchor !== anchor) return;
+    if (event.relatedTarget && anchor.contains(event.relatedTarget)) return;
+    tipState.hide();
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    const anchor = anchorOf(event.target);
+    if (!anchor) { tipState.hide(); return; }
+    if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+    if (tipState.anchor === anchor) tipState.hide();
+    else tipState.show(anchor, "touch");
+  });
+
+  /* Escape hides the tip. A focus-only hint must not swallow the Escape that
+     closes a drawer, popover or the help panel. */
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !tipState.anchor) return;
+    const byFocus = tipState.origin === "focus";
+    tipState.hide();
+    if (!byFocus) event.stopImmediatePropagation();
+  });
+
+  document.addEventListener("scroll", () => tipState.hide(), { capture: true, passive: true });
+  window.addEventListener("resize", () => tipState.hide());
+}
+
+const app = Vue.createApp({
   data() {
     return {
       mounts: [],
@@ -97,6 +238,14 @@ Vue.createApp({
       inspWidth: 288,
       resize: null,
 
+      compact: false,
+      mobile: false,
+      drawer: "",
+      drawerOpener: null,
+      helpOpen: false,
+      helpOpener: null,
+      tips: TIPS,
+
       toast: "",
       toastTimer: null,
 
@@ -151,6 +300,9 @@ Vue.createApp({
     },
     readable() { return Boolean(this.describe && this.describe.capabilities && this.describe.capabilities.readable); },
     navigable() { return Boolean(this.describe && this.describe.capabilities && this.describe.capabilities.navigable); },
+    etagTip() {
+      return this.lastETag ? TIPS.etag + " Valor completo: " + this.lastETag : TIPS.etag;
+    },
   },
 
   methods: {
@@ -316,6 +468,7 @@ Vue.createApp({
       this.resetPage();
     },
     async openTable(path, options) {
+      if (this.drawer === "tree") this.closeDrawer();
       if (!path || this.tablePath === path) return;
       options = options || {};
       this.reqId++;
@@ -523,9 +676,36 @@ Vue.createApp({
     isBoolColumn(col) { return /BOOL/i.test(col.declared_type || ""); },
     cell(row, col) { return (row.fields && row.fields[col.name]) || null; },
     cellTitle(value) {
-      if (!value || value.kind === "null") return "NULL";
-      if (value.kind === "blob") return "BLOB de " + this.blobBytes(value.data) + " bytes";
+      /* Full value only where it is truncated; NULL and BLOB have their own tooltip. */
+      if (!value || value.kind === "null" || value.kind === "blob") return null;
       return String(value.data);
+    },
+    /* `kind` y `status` se pintan como etiquetas; el tono es estable por valor.
+       `status` usa tonos convencionales; el resto, un hash sin signo (>>> 0:
+       `& 0xffffffff` en JS da enteros con signo y restos negativos). */
+    isTagCell(col, value) {
+      if (!value || value.kind !== "text") return false;
+      const name = String(col.name || "").toLowerCase();
+      if (name !== "kind" && name !== "status") return false;
+      const text = String(value.data).trim();
+      return text.length > 0 && text.length <= 32;
+    },
+    tagTone(col, value) {
+      const name = String(col.name || "").toLowerCase();
+      if (name === "status") {
+        const state = String(value.data).trim().toLowerCase();
+        if (/^(active|ok|done|closed|valid)$/.test(state)) return "is-ok";
+        if (/^(pending|open|in_progress|running|queued)$/.test(state)) return "is-pending";
+        if (/^(blocked|failed|error|invalid)$/.test(state)) return "is-blocked";
+        if (/^(superseded|archived|stale|inactive)$/.test(state)) return "is-muted";
+      }
+      return "tone-" + this.toneOf(value.data);
+    },
+    toneOf(value) {
+      const s = String(value);
+      let h = 5381;
+      for (let i = 0; i < s.length; i += 1) h = ((h * 33) + s.charCodeAt(i)) >>> 0;
+      return h % 7;
     },
 
     /* ---------- filters ---------- */
@@ -593,15 +773,20 @@ Vue.createApp({
         return;
       }
       this.searchOpen = false;
+      const searchInput = document.getElementById("q");
+      if (searchInput) searchInput.focus();
       const row = this.rows.find((r) => r.path === entry.row);
       if (row) this.selectRow(row, entry.column);
       else this.openRowPath(entry.row, entry.column);
     },
 
     /* ---------- rows and inspector ---------- */
-    selectRow(row, highlight) {
+    selectRow(row, highlight, event) {
       if (!this.navigable) return;
       this.openRowPath(row.path, highlight || "");
+      if (this.mobile && this.drawer !== "insp") {
+        this.openDrawer("insp", event ? event.currentTarget : null);
+      }
     },
     async openRowPath(path, highlight) {
       if (!path) return;
@@ -630,6 +815,10 @@ Vue.createApp({
     setInspector(open) {
       this.inspOpen = open;
       this.savePrefs();
+    },
+    collapseInspector() {
+      if (this.compact) this.closeDrawer();
+      else this.setInspector(false);
     },
     goRoot() { this.clearTable(); },
     goMount() {
@@ -733,6 +922,87 @@ Vue.createApp({
       this.savePrefs();
     },
 
+    /* ---------- drawers and focus ---------- */
+    drawerRoot() {
+      if (this.drawer === "tree") return this.$refs.tree;
+      if (this.drawer === "insp") return this.$refs.insp;
+      return null;
+    },
+    focusables(root) {
+      if (!root) return [];
+      const nodes = root.querySelectorAll(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      );
+      return Array.prototype.filter.call(nodes, (el) => el.getClientRects().length > 0);
+    },
+    trapTab(event, root) {
+      const items = this.focusables(root);
+      if (!items.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !root.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    openDrawer(kind, opener) {
+      if (!this.compact) return;
+      tipState.hide();
+      this.drawerOpener = opener || document.activeElement;
+      this.drawer = kind;
+      this.$nextTick(() => {
+        const root = this.drawerRoot();
+        if (!root) return;
+        const first = this.focusables(root)[0];
+        (first || root).focus();
+      });
+    },
+    closeDrawer() {
+      if (!this.drawer) return;
+      const opener = this.drawerOpener;
+      this.drawer = "";
+      this.drawerOpener = null;
+      this.$nextTick(() => {
+        if (opener && document.contains(opener) && opener.getClientRects().length) { opener.focus(); tipState.hide(); }
+      });
+    },
+    toggleDrawer(kind, event) {
+      if (this.drawer === kind) this.closeDrawer();
+      else this.openDrawer(kind, event.currentTarget);
+    },
+    openHelp(event) {
+      tipState.hide();
+      this.helpOpener = event ? event.currentTarget : document.activeElement;
+      this.helpOpen = true;
+      this.$nextTick(() => {
+        const root = this.$refs.help;
+        if (!root) return;
+        const first = this.focusables(root)[0];
+        (first || root).focus();
+      });
+    },
+    closeHelp() {
+      if (!this.helpOpen) return;
+      const opener = this.helpOpener;
+      this.helpOpen = false;
+      this.helpOpener = null;
+      this.$nextTick(() => {
+        if (opener && document.contains(opener) && opener.getClientRects().length) { opener.focus(); tipState.hide(); }
+      });
+    },
+    onBreakpointChange() {
+      this.compact = this.mqCompact.matches;
+      this.mobile = this.mqMobile.matches;
+      if (!this.compact) this.closeDrawer();
+    },
+
     /* ---------- global input ---------- */
     onDocClick(event) {
       if (this.colMenuOpen && !event.target.closest("#col-menu") && !event.target.closest("#columns-btn")) {
@@ -746,6 +1016,29 @@ Vue.createApp({
       }
     },
     onKey(event) {
+      if (this.helpOpen) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          this.closeHelp();
+          return;
+        }
+        if (event.key === "Tab") {
+          this.trapTab(event, this.$refs.help);
+          return;
+        }
+        return;
+      }
+      if (this.drawer) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          this.closeDrawer();
+          return;
+        }
+        if (event.key === "Tab") {
+          this.trapTab(event, this.drawerRoot());
+        }
+        return;
+      }
       if (event.key === "Escape") {
         if (this.searchOpen) this.searchOpen = false;
         if (this.colMenuOpen) this.colMenuOpen = false;
@@ -764,13 +1057,24 @@ Vue.createApp({
   mounted() {
     this.loadPrefs();
     this.loadMounts();
+    this.mqCompact = window.matchMedia("(max-width:1199.98px)");
+    this.mqMobile = window.matchMedia("(max-width:767.98px)");
+    this.onBreakpointChange();
+    this.mqCompact.addEventListener("change", this.onBreakpointChange);
+    this.mqMobile.addEventListener("change", this.onBreakpointChange);
     document.addEventListener("click", this.onDocClick);
     document.addEventListener("keydown", this.onKey);
   },
   beforeUnmount() {
+    this.mqCompact.removeEventListener("change", this.onBreakpointChange);
+    this.mqMobile.removeEventListener("change", this.onBreakpointChange);
     document.removeEventListener("click", this.onDocClick);
     document.removeEventListener("keydown", this.onKey);
     clearTimeout(this.toastTimer);
   },
-}).mount("#app");
+});
+
+app.directive("tip", tipDirective);
+initTooltips();
+app.mount("#app");
 })();
