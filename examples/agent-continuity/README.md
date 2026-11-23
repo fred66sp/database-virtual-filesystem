@@ -174,9 +174,9 @@ bash init.sh --demo   # además, datos ficticios de seed.sql
 ```
 
 `init.sh` es idempotente, toma el lock de `config.json` que usa db-ai y no toca
-los recuerdos de una base existente. La base `.agent-memory/memory.db` se versiona
-o no según decida el proyecto anfitrión; por defecto está excluida, y en este
-repositorio se versiona solo la base, no `acm-forms/` ni los estados de SQLite. No
+Los recuerdos de una base existente. La base `.agent-memory/memory.db` se versiona
+o no según decida el proyecto anfitrión; por defecto está excluida, y este
+repositorio la excluye con el resto del directorio (decidido 2026-11-23). No
 tiene copia automática: la copia es del operador.
 
 ## Formularios y automatización
