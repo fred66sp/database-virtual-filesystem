@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["./.tasks-ai/extensions/opencode", "-engram"],
+  "plugins": ["-engram"],
   "mcp": {
     "servers": {
       "engram": { "disabled": true }
