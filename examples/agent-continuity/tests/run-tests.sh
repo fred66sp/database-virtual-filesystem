@@ -419,8 +419,9 @@ else
 fi
 
 # --- Casos 14-22: binario Go ACM (start, aif y --version) -------------------
-# El adaptador Python tools/acm.py queda como referencia; el binario Go es el
-# sustituto. La suite construye el binario con `go build` y lo prueba contra la
+# El adaptador Python tools/acm.py se retiró el 2026-11-27 (tk-85); el binario
+# Go es la única implementación de ACM. La suite construye el binario con
+# `go build` y lo prueba contra la
 # misma base temporal. Esta suite no usaba formularios, submit, remember ni
 # search, así que no se retira ninguna comprobación previa.
 command -v go >/dev/null 2>&1 || { echo "falta go en PATH (binario ACM)" >&2; exit 1; }
@@ -438,7 +439,7 @@ export OPENCODE_SESSION_ID="suite-go"
 
 # Caso 14: --version.
 out=$("$acm_bin" --version 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Eq '^acm [0-9]+\.[0-9]+\.[0-9]+$'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Eq '^acm [0-9]+\.[0-9]+\.[0-9]+( \([0-9A-Za-z.-]+\))?$'; then
   ok "acm --version sale 0 con la versión ($out)"
 else
   ko "acm --version sale 0 con la versión" "rc=$rc salida: $out"

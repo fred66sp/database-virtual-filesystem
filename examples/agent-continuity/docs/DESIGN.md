@@ -742,10 +742,9 @@ La comprobación de navegabilidad confirma la regla de §4.1: con `id TEXT NOT N
 **Estado:** aprobada por el PO el 2026-11-27 · **Ámbito:** `examples/agent-continuity/go/`.
 
 El adaptador Python `tools/acm.py` queda **reemplazado por** un binario Go
-independiente desde el 2026-11-27. El fichero Python se conserva en el árbol como
-referencia funcional y fuente de los goldens de `content_hash`; `tools/content-hash.py`
-sigue siendo la implementación normativa de §5.2. Esta sección es aditiva: no
-reescribe el modelo de datos, la política ni los flujos de §1–§16.
+independiente desde el 2026-11-27 y se retiró del árbol ese mismo día. `tools/content-hash.py`
+sigue siendo la implementación normativa de §5.2 y la fuente de los goldens de `content_hash`.
+Esta sección es aditiva: no reescribe el modelo de datos, la política ni los flujos de §1–§16.
 
 ### 17.1 Composición
 

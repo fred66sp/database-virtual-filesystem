@@ -11,8 +11,10 @@ una sola pieza, [go/](go/), que aplica las garantías del esquema: deduplicació
 por `content_hash`, control de concurrencia por ETag y mutaciones agrupadas en una
 transacción de db-ai. Los requisitos están en [docs/PRD.md](docs/PRD.md) y el
 contrato técnico, incluido el DDL canónico, en [docs/DESIGN.md](docs/DESIGN.md).
-El adaptador Python [tools/acm.py](tools/acm.py) queda como referencia funcional y
-fuente de los goldens de `content_hash`; no es la interfaz vigente.
+El adaptador Python `tools/acm.py` se retiró el 2026-11-27; el
+binario Go es la única implementación de ACM. La referencia normativa del
+`content_hash` que produjo los goldens se conserva en
+[tools/content-hash.py](tools/content-hash.py).
 
 ## Interfaz: `start`, `aif` y `--version`
 
@@ -122,13 +124,6 @@ ln -sf "$(pwd)/acm" ~/.local/bin/acm
 acm --version   # acm 0.1.0 (<commit>)
 ```
 
-Reversión al adaptador Python (conservado como referencia, en la misma carpeta
-`tools/` del ejemplo):
-
-```bash
-ln -sf "$(pwd)/../tools/acm.py" ~/.local/bin/acm
-```
-
 Requisitos: `db-ai` en `PATH` con el contrato v0.2.0, `sqlite3` y `flock` para
 `init.sh`; Go 1.27 solo para compilar. Python 3 solo hace falta para `init.sh`
 y para la herramienta de referencia `tools/content-hash.py`; el binario no lo
@@ -210,6 +205,8 @@ que contenía el defecto del upsert en batch. El 2026-11-27 se retiró también 
 capa de formularios del adaptador Python (`form_id`, `submit`, los marcadores
 `acm-forms/`, los comandos con flags y `remember`/`search`): el binario Go
 conserva el núcleo y las garantías, y la interfaz pasa a `start`, `aif` y
-`--version`. Todo es recuperable por el historial de Git; no se mantiene en
-paralelo. Las instrucciones operativas vigentes viven en el bloque «Memoria
-(ACM)» del [AGENTS.md](../../AGENTS.md) del repositorio.
+`--version`. El 2026-11-27 se retiró también el fichero `tools/acm.py` del árbol:
+el binario Go queda como única implementación. Todo es recuperable por el
+historial de Git; no se mantiene en paralelo. Las instrucciones operativas
+vigentes viven en el bloque «Memoria (ACM)» del
+[AGENTS.md](../../AGENTS.md) del repositorio.

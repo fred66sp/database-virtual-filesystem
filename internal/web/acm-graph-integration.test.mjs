@@ -3,16 +3,18 @@
 //
 //   TK77_ACM_INTEGRATION=1 node --test internal/web/acm-graph-integration.test.mjs
 //
-// Crea su propia memoria con el init.sh oficial bajo /tmp/opencode, captura
-// registros con los eventos normales de acm.py, levanta `db-ai serve` con
+// captura registros con los eventos normales de ACM (start más las operaciones
+// AIF del binario: decision, learning, checkpoint, preference y close), levanta
+// `db-ai serve` con
 // XDG_CONFIG_HOME y XDG_STATE_HOME aislados y llama al adaptador real
 // (static/acm-graph-data.js) sobre la API HTTP real. Nunca toca la memoria del
 // proyecto ni el puerto 8893; sin la variable de entorno no hace nada.
 //
-// acm.py no expone un evento para sustituir decisiones. El procedimiento
+// Las operaciones AIF no exponen un evento para sustituir decisiones. El
+// procedimiento
 // oficial de ACM es el batch de DESIGN §5.4/§8.3: touch de la fila nueva y
 // write de la anterior con ETag, status=superseded y superseded_by. Se usa
-// `db-ai batch`, la misma vía que acm.py emplea para checkpoints y
+// `db-ai batch`, la misma vía que ACM emplea para checkpoints y
 // preferencias; no hay ninguna escritura SQL directa.
 
 import { test } from "node:test";
@@ -32,7 +34,7 @@ const exec = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
 const INIT = path.join(REPO, "examples/agent-continuity/init.sh");
-const ACM = path.join(REPO, "examples/agent-continuity/tools/acm.py");
+const ACM_GO = path.join(REPO, "examples/agent-continuity/go");
 const HASH_TOOL = path.join(REPO, "examples/agent-continuity/tools/content-hash.py");
 const DB_AI = process.env.DB_AI ?? "db-ai";
 const ALIAS = "memtk77";
@@ -48,10 +50,29 @@ async function run(cmd, args, env) {
   return { stdout, stderr };
 }
 
-async function acm(env, ...args) {
-  const { stdout } = await run("python3", [ACM, ...args], env);
+// El binario ACM se construye al vuelo en /tmp/opencode, como hace la suite
+// bash de examples/agent-continuity; no depende de artefactos fuera de Git.
+const builtAcm = [];
+async function buildAcm(env) {
+  if (buildAcm.cache) return buildAcm.cache;
+  if ((await exec("go", ["version"], { env }).catch(() => null)) === null) {
+    throw new Error("falta go en PATH, necesario para construir el binario ACM");
+  }
+  const bin = path.join(await realpath("/tmp/opencode"), `acm-tk77-${randomBytes(4).toString("hex")}`);
+  await exec("go", ["build", "-o", bin, "./cmd/acm"], { env, cwd: ACM_GO });
+  builtAcm.push(bin);
+  buildAcm.cache = bin;
+  return bin;
+}
+
+// Una operación AIF 0.2 del binario: la entrada por stdin y el resultado
+// executed con su outcome; cualquier otra cosa es fallo.
+async function acm(env, operation, input = {}) {
+  const bin = await buildAcm(env);
+  const request = JSON.stringify({ aif: "0.2", operation, input });
+  const { stdout } = await runWithInput(bin, ["aif"], env, request);
   const body = JSON.parse(stdout);
-  assert.equal(body.ok, true, `acm ${args.join(" ")} falló: ${stdout}`);
+  assert.equal(body.result, "executed", `acm aif ${operation} falló: ${stdout}`);
   return body;
 }
 
@@ -313,6 +334,7 @@ test(
     let server;
     t.after(async () => {
       await stopServer(server);
+      for (const bin of builtAcm) await rm(bin, { force: true });
       if (process.env.TK77_KEEP !== "1") await rm(root, { recursive: true, force: true });
       else t.diagnostic(`memoria de prueba conservada en ${root}`);
     });
@@ -330,60 +352,53 @@ test(
     // 2. Registros por los mecanismos normales de ACM: sesión abierta y cerrada,
     //    decisión, aprendizajes, dos preferencias (la segunda sustituye a la
     //    primera) y checkpoints.
-    await run("python3", [ACM, "start", "--goal", "Integración real tk-77"], env);
-    await acm(
-      env,
-      "decision",
-      "--topic", "tk77",
-      "--title", "El grafo se lee de la API de solo lectura",
-      "--decision", "El adaptador usa ls, describe y find",
-      "--rationale", "La vista no puede escribir la memoria",
-      "--confidence", "confirmed",
-    );
-    await acm(
-      env,
-      "decision",
-      "--topic", "tk77-decision",
-      "--title", "Decisión inicial sobre el refresco",
-      "--decision", "El grafo se recarga después de cada sustitución",
-      "--rationale", "Comprobar la cadena de sustitución de una decisión",
-      "--confidence", "confirmed",
-    );
-    await acm(
-      env,
-      "learning",
-      "--title", "Los nodos conservan la ruta de origen",
-      "--body", "Cada nodo del grafo lleva la ruta db-ai del registro que lo produjo.",
-      "--topic", "tk77",
-      "--confidence", "confirmed",
-    );
-    await acm(env, "checkpoint", "--state", "Integración en curso", "--next-steps", "Cargar el grafo");
-    const firstPref = await acm(
-      env,
-      "preference",
-      "--pref-key", "tk77-color",
-      "--value", "azul",
-      "--origin", "agent",
-      "--rationale", "Valor inicial de la prueba",
-    );
-    const secondPref = await acm(
-      env,
-      "preference",
-      "--pref-key", "tk77-color",
-      "--value", "verde",
-      "--origin", "agent",
-      "--rationale", "Sustituye al valor inicial",
-    );
-    assert.equal(firstPref.result, "created");
-    assert.equal(secondPref.result, "created");
+    await buildAcm(env);
+    await run(buildAcm.cache, ["start", "--goal", "Integración real tk-77"], env);
+    await acm(env, "decision", {
+      topic: "tk77",
+      title: "El grafo se lee de la API de solo lectura",
+      decision: "El adaptador usa ls, describe y find",
+      rationale: "La vista no puede escribir la memoria",
+      confidence: "confirmed",
+    });
+    await acm(env, "decision", {
+      topic: "tk77-decision",
+      title: "Decisión inicial sobre el refresco",
+      decision: "El grafo se recarga después de cada sustitución",
+      rationale: "Comprobar la cadena de sustitución de una decisión",
+      confidence: "confirmed",
+    });
+    await acm(env, "learning", {
+      title: "Los nodos conservan la ruta de origen",
+      body: "Cada nodo del grafo lleva la ruta db-ai del registro que lo produjo.",
+      topic: "tk77",
+      confidence: "confirmed",
+    });
+    await acm(env, "checkpoint", { state: "Integración en curso", next_steps: "Cargar el grafo" });
+    const firstPref = await acm(env, "preference", {
+      pref_key: "tk77-color",
+      value: "azul",
+      origin: "agent",
+      rationale: "Valor inicial de la prueba",
+    });
+    const secondPref = await acm(env, "preference", {
+      pref_key: "tk77-color",
+      value: "verde",
+      origin: "agent",
+      rationale: "Sustituye al valor inicial",
+    });
+    assert.equal(firstPref.outcome.result, "created");
+    assert.equal(secondPref.outcome.result, "created");
 
     env.OPENCODE_SESSION_ID = CLOSED_SESSION;
-    await run("python3", [ACM, "start", "--goal", "Sesión cerrada tk-77"], env);
-    await acm(env, "learning", "--title", "La sesión cerrada sigue en el grafo",
-      "--body", "Un registro de una sesión cerrada es un nodo más, con su arista de sesión.",
-      "--topic", "tk77");
-    const closed = await acm(env, "close", "--summary", "Cierre de la prueba de integración");
-    assert.equal(closed.result, "closed");
+    await run(buildAcm.cache, ["start", "--goal", "Sesión cerrada tk-77"], env);
+    await acm(env, "learning", {
+      title: "La sesión cerrada sigue en el grafo",
+      body: "Un registro de una sesión cerrada es un nodo más, con su arista de sesión.",
+      topic: "tk77",
+    });
+    const closed = await acm(env, "close", { summary: "Cierre de la prueba de integración" });
+    assert.equal(closed.outcome.result, "closed");
     env.OPENCODE_SESSION_ID = SESSION;
 
     // 3. Servidor aislado en un puerto efímero, nunca el 8893 del explorador.
@@ -461,7 +476,7 @@ test(
     );
 
     // Sustitución de una decisión por el procedimiento oficial de ACM
-    // (DESIGN §5.4/§8.3). acm.py no tiene evento de sustitución: el batch de
+    // (DESIGN §5.4/§8.3). Las operaciones AIF no tienen evento de sustitución: el batch de
     // db-ai hace `touch` de la nueva y `write` de la anterior con ETag. No hay
     // escritura SQL directa. Primero se comprueba que la inicial está activa.
     const initialDecision = graph.nodes.find(
@@ -546,14 +561,12 @@ test(
     );
 
     // 7. Refresco: una observación nueva capturada por ACM aparece al recargar.
-    const fresh = await acm(
-      env,
-      "learning",
-      "--title", "Observación posterior al primer grafo",
-      "--body", "Debe aparecer como nodo al volver a cargar el grafo.",
-      "--topic", "tk77",
-    );
-    assert.equal(fresh.result, "created");
+    const fresh = await acm(env, "learning", {
+      title: "Observación posterior al primer grafo",
+      body: "Debe aparecer como nodo al volver a cargar el grafo.",
+      topic: "tk77",
+    });
+    assert.equal(fresh.outcome.result, "created");
     const freshRow = (await rowsOf(db, "observations")).find(
       (row) => row.title === "Observación posterior al primer grafo",
     );

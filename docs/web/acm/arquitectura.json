@@ -57,7 +57,7 @@
     {
       "id": "adaptador-acm",
       "type": "frontend",
-      "label": "Adaptador acm.py (AIF)",
+      "label": "Binario acm (AIF)",
       "sublabel": "eventos AIF y formularios",
       "pos": [
         40,

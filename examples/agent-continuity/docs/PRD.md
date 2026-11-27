@@ -411,14 +411,14 @@ Condiciones que obligan a revisar este PRD: cambio de versión de db-ai, cambio 
 | Engram usa sesiones, observaciones, `topic_key`, revisión y conflictos | hecho | documentación de Engram | GitHub `docs/ARCHITECTURE.md` | inspiración conceptual; no se clona ni se atribuye la misma implementación |
 | El problema de continuidad existe para agentes en este repositorio | inferencia | `AGENTS.md`, tablero y modelo de trabajo | §4 | sin entrevistas ni analítica; no se mide su magnitud |
 | La memoria acotada reduce el contexto de reanudación | hecho medido | benchmark con 10 240 observaciones y prueba con dos agentes | [evidence-benchmark.md](../scenarios/evidence/evidence-benchmark.md) §8; [evidence-agents.md](../scenarios/evidence/evidence-agents.md) | con `session_id` conocido cumple 1 444 tokens; en frío falla (9 058) por C-ACM-03; M-ACM-05 ratificada por el PO el 2026-11-20 |
-| El adaptador `acm` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh`, `tools/acm.py` y `scenarios/evidence/` | la implementación vive en el árbol; su disponibilidad en el binario instalado depende de la release |
+| El adaptador `acm` y el bootstrap existen y se ejecutaron | hecho | repositorio | `examples/agent-continuity/init.sh` y `scenarios/evidence/` | la implementación Python existió y se retiró el 2026-11-27; el binario Go es la única implementación, y su disponibilidad depende de la release |
 | Una base por proyecto y UUIDv7 en `examples/` | decisión aprobada | PO, encargo tk-18 | §16 | no consta en un documento versionado aparte del tablero |
 | db-ai v0.2.0 es la primera release | decisión aprobada | PO, encargo tk-18 | §16 | sujeta a la versión desplegada |
 | No se guardan conversaciones completas por defecto | decisión aprobada | PO, encargo tk-18 | §8.2 y §16 | el adaptador debe demostrar que cumple |
 
 ### Límites de la verificación
 
-- ACM está implementado en el árbol: `init.sh`, el esquema y el adaptador `tools/acm.py` existen y se ejecutaron. Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin el adaptador.
+- ACM está implementado en el árbol: `init.sh` y el esquema existen y se ejecutaron, y el binario Go es la única implementación desde el 2026-11-27 (la implementación Python existió, se ejecutó y se retiró). Lo verificado es la convención y el flujo guiado, no el cumplimiento espontáneo de un agente sin el adaptador.
 - M-ACM-01 a M-ACM-04 están medidas sobre un fixture determinista de 10 240 observaciones y M-ACM-05 con dos agentes reales, ratificada como evaluación humana por el PO el 2026-11-20. Veredictos en §7 y §17.
 - No se hicieron entrevistas ni observación de usuarios; las personas se sostienen en artefactos del repositorio.
 - `db-ai version` existe en el árbol y devuelve `{version, commit, state}`, pero el binario instalado puede no exponerlo hasta la release y, sin `ldflags`, `commit` es `unknown` (DESIGN de db-ai §3; DESIGN §14 C-ACM-01).

@@ -7,6 +7,15 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/lang/es
 
 ## [No publicado]
 
+### Cambiado
+
+- El binario Go (`examples/agent-continuity/go/`) queda como única implementación
+  de ACM: `tools/acm.py` se retira del árbol el 2026-11-27 y todo lo que la
+  documentación enlazaba como «referencia funcional» pasa a ser solo
+  `tools/content-hash.py` (normativa del `content_hash`). Recuperable por el
+  historial de Git; el test de integración del grafo ahora habla AIF 0.2 con el
+  binario por `stdin` en vez de invocar el adaptador Python.
+
 ### Añadido
 
 - `db-ai serve [--port N] [--open]`: Visual Explorer local de solo lectura. Un
