@@ -418,6 +418,158 @@ else
     "sesión=$elegida vigente=$vigente esperado_sesión=${fixture[0]:-} esperado_checkpoint=${fixture[1]:-} página=$pagina_filas truncada_sesiones=$sesiones_truncada truncada_página=$pagina_truncada antiguo=$antiguo activos=$activos"
 fi
 
+# --- Casos 14-22: binario Go ACM (start, aif y --version) -------------------
+# El adaptador Python tools/acm.py queda como referencia; el binario Go es el
+# sustituto. La suite construye el binario con `go build` y lo prueba contra la
+# misma base temporal. Esta suite no usaba formularios, submit, remember ni
+# search, así que no se retira ninguna comprobación previa.
+command -v go >/dev/null 2>&1 || { echo "falta go en PATH (binario ACM)" >&2; exit 1; }
+go_dir="$example_dir/go"
+acm_bin="$tmp/acm"
+if (cd "$go_dir" && go build -o "$acm_bin" ./cmd/acm) >/dev/null 2>&1; then
+  ok "go build construye el binario acm"
+else
+  ko "go build construye el binario acm" "falló; ejecuta go build ./... en $go_dir"
+  printf '\n%d ok, %d fallos\n' "$passed" "$failed"
+  exit 1
+fi
+
+export OPENCODE_SESSION_ID="suite-go"
+
+# Caso 14: --version.
+out=$("$acm_bin" --version 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Eq '^acm [0-9]+\.[0-9]+\.[0-9]+$'; then
+  ok "acm --version sale 0 con la versión ($out)"
+else
+  ko "acm --version sale 0 con la versión" "rc=$rc salida: $out"
+fi
+
+# Caso 15: start abre la sesión con su objetivo.
+out=$("$acm_bin" start --goal "suite go" 2>&1); rc=$?
+rows=$(sqlite3 "$db" "SELECT count(*) FROM sessions WHERE id='suite-go' AND goal='suite go' AND status='open';")
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Fq 'Sesión iniciada.' \
+  && printf '%s' "$out" | grep -Fq 'Objetivo: suite go' && [ "$rows" = "1" ]; then
+  ok "acm start abre la sesión y muestra el objetivo"
+else
+  ko "acm start abre la sesión y muestra el objetivo" "rc=$rc filas=$rows salida: $out"
+fi
+
+# Caso 16: start restaura la sesión abierta.
+out=$("$acm_bin" start 2>&1); rc=$?
+rows=$(sqlite3 "$db" "SELECT count(*) FROM sessions WHERE id='suite-go';")
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Fq 'Sesión restaurada.' && [ "$rows" = "1" ]; then
+  ok "acm start restaura la sesión sin duplicarla"
+else
+  ko "acm start restaura la sesión sin duplicarla" "rc=$rc filas=$rows salida: $out"
+fi
+
+# Caso 17: discovery AIF sin operation.
+out=$(printf '%s' '{"aif":"0.2"}' | "$acm_bin" aif 2>&1); rc=$?
+ops=$(printf '%s' "$out" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["operations"]))' 2>/dev/null)
+if [ "$rc" -eq 0 ] && [ "$ops" = "10" ] && ! printf '%s' "$out" | grep -Fq '"result"'; then
+  ok "acm aif discovery enumera 10 operaciones y sale 0"
+else
+  ko "acm aif discovery enumera 10 operaciones y sale 0" "rc=$rc ops=$ops salida: $out"
+fi
+
+# Caso 18: input_needed cuando falta un dato obligatorio del formulario.
+out=$(printf '%s' '{"aif":"0.2","operation":"learning","input":{"title":"Solo el título"}}' | "$acm_bin" aif 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq '"result":"input_needed"' \
+  && printf '%s' "$out" | grep -Fq '"missing":["body"]'; then
+  ok "acm aif input_needed sale 2 con el campo que falta"
+else
+  ko "acm aif input_needed sale 2 con el campo que falta" "rc=$rc salida: $out"
+fi
+
+# Caso 19: invalid cuando un valor no está en el conjunto cerrado.
+out=$(printf '%s' '{"aif":"0.2","operation":"learning","input":{"title":"T","body":"B","confidence":"quizá"}}' | "$acm_bin" aif 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq '"result":"invalid"' \
+  && printf '%s' "$out" | grep -Fq '"confidence"'; then
+  ok "acm aif invalid sale 2 con el campo culpable"
+else
+  ko "acm aif invalid sale 2 con el campo culpable" "rc=$rc salida: $out"
+fi
+
+# Caso 20: executed y consolidación por content_hash.
+learning='{"aif":"0.2","operation":"learning","input":{"title":"Suite Go ejecutada","body":"La batería bash habla con el binario Go.","topic":"suite/go"}}'
+out=$(printf '%s' "$learning" | "$acm_bin" aif 2>&1); rc=$?
+out2=$(printf '%s' "$learning" | "$acm_bin" aif 2>&1); rc2=$?
+obs=$(sqlite3 "$db" "SELECT count(*) FROM observations WHERE title='Suite Go ejecutada';")
+if [ "$rc" -eq 0 ] && [ "$rc2" -eq 0 ] \
+  && printf '%s' "$out" | grep -Fq '"result":"executed"' \
+  && printf '%s' "$out" | grep -Fq '"result":"created"' \
+  && printf '%s' "$out2" | grep -Fq '"result":"consolidated"' \
+  && [ "$obs" = "1" ]; then
+  ok "acm aif executed crea y consolida sin duplicar la fila"
+else
+  ko "acm aif executed crea y consolida sin duplicar la fila" "rc1=$rc rc2=$rc2 filas=$obs salida1: $out salida2: $out2"
+fi
+
+# Caso 21: close cierra con checkpoint y después denied sobre la sesión cerrada.
+out=$(printf '%s' '{"aif":"0.2","operation":"close","input":{"summary":"Suite Go cerrada"}}' | "$acm_bin" aif 2>&1); rc=$?
+status=$(sqlite3 "$db" "SELECT status FROM sessions WHERE id='suite-go';")
+out2=$(printf '%s' '{"aif":"0.2","operation":"learning","input":{"title":"T","body":"B"}}' | "$acm_bin" aif 2>&1); rc2=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -Fq '"result":"executed"' \
+  && [ "$status" = "closed" ] \
+  && [ "$rc2" -eq 4 ] && printf '%s' "$out2" | grep -Fq '"result":"denied"'; then
+  ok "acm aif close cierra y denied sale 4 sobre la sesión cerrada"
+else
+  ko "acm aif close cierra y denied sale 4 sobre la sesión cerrada" "rc1=$rc estado=$status rc2=$rc2 salida1: $out salida2: $out2"
+fi
+
+# Caso 22: E_COMMIT_UNKNOWN no se reintenta y sale con su código.
+
+OPENCODE_SESSION_ID=suite-unknown "$acm_bin" start >/dev/null 2>&1
+stub_dir="$tmp/stub"
+stub_log="$tmp/stub.log"
+mkdir -p "$stub_dir"
+cat > "$stub_dir/db-ai" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$1" >> "$STUB_LOG"
+if [ "$1" = "find" ]; then
+  case "$2" in
+    */sessions)
+      printf '{"version":1,"ok":true,"data":{"rows":[{"path":"%s","fields":{"id":{"kind":"text","data":"suite-unknown"},"goal":{"kind":"text","data":"objetivo"},"status":{"kind":"text","data":"open"},"summary":{"kind":"null","data":""}},"etag":"sha256:x"}]},"meta":{}}\n' "$2"
+      exit 0 ;;
+    *)
+      printf '{"version":1,"ok":true,"data":{"rows":[]},"meta":{}}\n'
+      exit 0 ;;
+  esac
+fi
+if [ "$1" = "batch" ]; then
+  printf '{"version":1,"ok":false,"error":{"code":"E_COMMIT_UNKNOWN","message":"resultado desconocido"}}\n'
+  exit 10
+fi
+printf '{"version":1,"ok":false,"error":{"code":"E_INTERNAL","message":"llamada inesperada"}}\n'
+exit 9
+SH
+chmod +x "$stub_dir/db-ai"
+out=$(printf '%s' '{"aif":"0.2","operation":"checkpoint","input":{"state":"s","next_steps":"n"}}' \
+  | STUB_LOG="$stub_log" PATH="$stub_dir:$PATH" OPENCODE_SESSION_ID=suite-unknown "$acm_bin" aif 2>&1); rc=$?
+code=$(error_code "$out")
+batches=$(grep -c '^batch$' "$stub_log" 2>/dev/null || true)
+if [ "$rc" -eq 1 ] && [ "$code" = "E_COMMIT_UNKNOWN" ] && [ "$batches" = "1" ]; then
+  ok "E_COMMIT_UNKNOWN sale 1 con su código y no reintenta el batch"
+else
+  ko "E_COMMIT_UNKNOWN sale 1 con su código y no reintenta el batch" "rc=$rc code=$code batches=$batches salida: $out"
+fi
+
+# Caso 23: paridad multi-escritor del wiring de rationale (review tk-84, F1).
+# El recuerdo llega por acm aif (Go) con rationale; el digest que Go consulta
+# e inserta debe coincidir con el que content-hash.py produce para ese mismo
+# contenido canónico: si alguien retira el campo de la operación, este caso rompe.
+OPENCODE_SESSION_ID=suite-parity "$acm_bin" start >/dev/null 2>&1
+printf '%s' '{"aif":"0.2","operation":"bugfix","input":{"title":"Paridad de rationale","body":"El digest debe incluir el motivo.","rationale":"Causa raíz E_TAG."}}' \
+  | OPENCODE_SESSION_ID=suite-parity "$acm_bin" aif >/dev/null 2>&1
+parity=$(sqlite3 "$db" "SELECT content_hash FROM observations WHERE title='Paridad de rationale';")
+pyhash=$(printf '%s' '{"kind":"bugfix","title":"Paridad de rationale","body":"El digest debe incluir el motivo.","rationale":"Causa raíz E_TAG.","alternatives":"","consequences":"","topic_key":""}' \
+  | python3 "$example_dir/tools/content-hash.py" observations)
+if [ -n "$parity" ] && [ "$parity" = "$pyhash" ]; then
+  ok "acm aif bugfix alimenta content_hash igual que content-hash.py (paridad)"
+else
+  ko "acm aif bugfix alimenta content_hash igual que content-hash.py (paridad)" "go=$parity python=$pyhash"
+fi
+
 # --- Resultado -------------------------------------------------------------
 printf '\n%d ok, %d fallos\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

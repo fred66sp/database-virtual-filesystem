@@ -736,3 +736,79 @@ La comprobación de navegabilidad confirma la regla de §4.1: con `id TEXT NOT N
 | Bootstrap y copia | base perdida si no se copia | runbook del operador; fuera de Git por defecto, o versionada según decida el anfitrión |
 | Dependencia de db-ai | un cambio de contrato rompe ACM | fijar v0.2.0 y probar la integración antes de subir versión |
 | Versión desplegada | `db-ai version` existe en el árbol, pero el binario instalado puede ser anterior | verificar `version` y `commit` antes de confiar en el contrato; release con autorización del PO |
+
+## 17. Implementación ejecutable en Go (reemplaza al adaptador Python)
+
+**Estado:** aprobada por el PO el 2026-11-27 · **Ámbito:** `examples/agent-continuity/go/`.
+
+El adaptador Python `tools/acm.py` queda **reemplazado por** un binario Go
+independiente desde el 2026-11-27. El fichero Python se conserva en el árbol como
+referencia funcional y fuente de los goldens de `content_hash`; `tools/content-hash.py`
+sigue siendo la implementación normativa de §5.2. Esta sección es aditiva: no
+reescribe el modelo de datos, la política ni los flujos de §1–§16.
+
+### 17.1 Composición
+
+| Pieza | Responsabilidad | No aporta |
+|---|---|---|
+| `go/cmd/acm` | cableado de la CLI, parseo de `start`, lectura de `stdin` y mapeo de resultado a código de salida | reglas de memoria |
+| `go/internal/aifops` | las diez operaciones AIF 0.2 y la clasificación de errores del núcleo | persistencia |
+| `go/internal/memory` | sesiones, observaciones, checkpoints, preferencias, continuidad, recall, `content_hash`, UUIDv7 y cliente `db-ai` | presentación |
+| biblioteca AIF 0.2 | envelope, discovery, validación de campos y `Response` determinista | semántica de memoria |
+| `db-ai` (CLI) | rutas, ETag, transacciones, política y errores de datos | DDL y reglas de ACM |
+
+El binario no importa db-ai como paquete: lo ejecuta con `exec.Command` y traduce
+su envelope JSON (`ok`, `data`, `error.code`, `error.message`). La única
+dependencia de terceros del módulo, además de la biblioteca AIF, es
+`golang.org/x/text` (NFC y casefold); el resto es biblioteca estándar.
+
+### 17.2 Superficie pública
+
+- `acm start [--goal G] [--session S]`: Markdown de continuidad con las mismas
+  secciones y el mismo formato que el adaptador Python.
+- `acm aif`: una petición AIF 0.2 por `stdin`, un objeto JSON por `stdout`.
+  Discovery más diez operaciones: `decision`, `learning`, `discovery`, `bugfix`,
+  `pattern`, `architecture`, `preference`, `recall`, `checkpoint` y `close`. La
+  sesión es un miembro opcional de `input`; si falta, se usa
+  `OPENCODE_SESSION_ID`.
+- `acm --version`.
+
+No existen `submit`, `remember`, `search`, formularios ni marcadores: la capa de
+formularios de AIF la sirve la biblioteca y la validación se expresa en los
+campos de cada `Operation` (obligatoriedad, tipo, conjunto cerrado y reglas del
+dominio). El perfil CLI es el de AIF 0.2: `0` executed/discovery, `2`
+input_needed/invalid, `3` unknown_operation/unsupported_version/malformed_request,
+`4` denied y `1` failed. `start` conserva además los códigos del adaptador
+anterior para sus errores (`E_USAGE` 2, `E_NOT_FOUND` 3, `E_CONSTRAINT` 6,
+`E_INTERNAL` 9, `E_COMMIT_UNKNOWN` 10, etc.).
+
+### 17.3 Garantía → guarda
+
+| Garantía de §5 y §11 | Guarda en el binario | Prueba |
+|---|---|---|
+| Hash canónico idéntico al de las bases existentes | `memory.ContentHash`: NFC, whitespace de Python (`\x1c-\x1f` incluidos), array compacto, sin escapado HTML ni de U+2028/2029, SHA-256 | `TestContentHashGoldens` (13 fixtures generados con `content-hash.py`) |
+| Deduplicación exacta | `RecordObservation` busca por `content_hash` antes de insertar; un `E_CONSTRAINT` por carrera se resuelve consolidando | `TestObservationDedupAndConsolidation`, caso 20 de la suite |
+| Consolidación con ETag | `consolidate` relee y reintenta como máximo 3 veces solo con `E_CONFLICT` | `TestObservationDedupAndConsolidation` |
+| Sin pérdida por carrera de preferencia | `SetPreference` arbitra por `UNIQUE(content_hash)` y devuelve `existing` | `TestPreferenceSupersession` |
+| Sustitución de preferencia | `touch` + `write` con `if_match` en un solo `batch` | `TestPreferenceSupersession` |
+| Checkpoint que sustituye al activo | `checkpointBatch` + `batch` atómico; un duplicado exacto es `existing` | `TestCheckpointSupersessionAndClose` |
+| Cierre con checkpoint final | `CloseSession`: checkpoint y cierre de sesión en el mismo `batch` | `TestCheckpointSupersessionAndClose`, caso 21 de la suite |
+| Estados de sesión | `OpenSession` exige `open`; una sesión cerrada es `denied` en AIF y `E_CONSTRAINT` en `start` | `TestCheckpointSupersessionAndClose`, `TestDeniedAfterClose` |
+| Rollback de lote | el `batch` de db-ai es una transacción; un fallo no deja la primera escritura | `TestBatchRollback` |
+| `E_COMMIT_UNKNOWN` sin reintento | el error de `batch` se propaga como `failed` con su código; no hay bucle de reintento alrededor | `TestCommitUnknownIsNotRetried` y caso 22 de la suite |
+| Búsqueda con casefold | `foldText`: casefold de `x/text`, NFD y sin marcas combinantes; relajación por términos significativos | `TestRecallFoldingAndRelaxation` |
+| UUIDv7 ordenable | `newID`: 48 bits de milisegundos, versión 7, variante 10 y 62 bits aleatorios | `TestUUIDv7Shape` |
+| Continuidad idéntica | `Start`, `Continuity` y `checkpointMarkdown` reproducen el Markdown del adaptador Python | comparación byte a byte contra `tools/acm.py` sobre la misma base (sesión nueva, restaurada y con checkpoint activo) |
+
+### 17.4 Límites declarados
+
+- `recall` mantiene el corte de 1 000 observaciones activas y la ausencia de
+  paginación de §10; no se añaden embeddings ni ranking.
+- El perfil AIF es un contrato publicado: este módulo solo aporta las
+  `Operation`s y el perfil CLI; no duplica ni reinterpreta la especificación
+  canónica de AIF.
+- La sustitución del ejecutable instalado globalmente y la aprobación del cierre
+  de la tarea no forman parte de esta implementación: las decide el PO.
+- La verificación provocada de `E_COMMIT_UNKNOWN` que §15.3 declaraba pendiente
+  queda cubierta por el binario con un `db-ai` de prueba que devuelve ese código
+  y cuenta las invocaciones.

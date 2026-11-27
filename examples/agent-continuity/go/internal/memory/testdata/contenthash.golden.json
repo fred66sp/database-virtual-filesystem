@@ -1,0 +1,140 @@
+[
+  {
+    "name": "acentos_nfc",
+    "table": "observations",
+    "data": {
+      "kind": "decision",
+      "title": "Decisión sobre el parser de fechas",
+      "body": "Las fechas sin zona se interpretan como UTC; el test lo fija.",
+      "rationale": "Evitar resultados distintos según la máquina del agente.",
+      "alternatives": "[]",
+      "consequences": "[]",
+      "topic_key": "parser/fechas"
+    },
+    "hash": "sha256:371bf103bf10cec68fcd61c47d2a6224913d4706177cfa094fbde3482447b1f1"
+  },
+  {
+    "name": "acentos_nfd",
+    "table": "observations",
+    "data": {
+      "kind": "decision",
+      "title": "Decisión sobre el parser de fechas",
+      "body": "Las fechas sin zona se interpretan como UTC; el test lo fija.",
+      "rationale": "Evitar resultados distintos según la máquina del agente.",
+      "alternatives": "[]",
+      "consequences": "[]",
+      "topic_key": "parser/fechas"
+    },
+    "hash": "sha256:371bf103bf10cec68fcd61c47d2a6224913d4706177cfa094fbde3482447b1f1"
+  },
+  {
+    "name": "comillas_y_guiones",
+    "table": "observations",
+    "data": {
+      "kind": "learning",
+      "title": "Comillas “tipográficas” y ‘simples’",
+      "body": "Un rango 2020–2025 y otro 2020—2025; también «castellanas».",
+      "topic_key": "docs/estilo"
+    },
+    "hash": "sha256:67e2c1a70f517e69ab872f8079237e489e40835c3e5a7def93e855975d613342"
+  },
+  {
+    "name": "html",
+    "table": "observations",
+    "data": {
+      "kind": "discovery",
+      "title": "El <body> y el & se escapan",
+      "body": "a < b > c & d, </script> y <!-- comentario -->"
+    },
+    "hash": "sha256:c6acdb178b558a1d6af441961d7a95f1495810800f6b1b17dc09884da6722fd6"
+  },
+  {
+    "name": "control_chars",
+    "table": "observations",
+    "data": {
+      "kind": "bugfix",
+      "title": "Separadores de control \u001c\u001d\u001e\u001f y más",
+      "body": "tabulador\tvertical\u000bformfeed\fretorno\rlinea\nnulo\u0000fin\u0007",
+      "rationale": "El hash debe colapsar \u001c-\u001f como whitespace de Python."
+    },
+    "hash": "sha256:7c7928de486bcc68fc0aa6870d1c47b3b10a7b7eff8b4084e7b4251e0eac248b"
+  },
+  {
+    "name": "unicode_spaces",
+    "table": "observations",
+    "data": {
+      "kind": "learning",
+      "title": " Espacios exóticos          ",
+      "body": " ogham estrecho medio　ideográficonel"
+    },
+    "hash": "sha256:e58d8f12b8654a55c2298a7a8eff85a71e1f48c3d6509e4686b9630d4ed01b39"
+  },
+  {
+    "name": "separadores_linea",
+    "table": "observations",
+    "data": {
+      "kind": "learning",
+      "title": "Antes después final",
+      "body": "U+2028 y U+2029 quedan crudos en el array canónico."
+    },
+    "hash": "sha256:e7c01aa0d13623b213b8db99908b68b93cc7d8e0ee2416d852515ec76d6a9f2f"
+  },
+  {
+    "name": "no_bmp",
+    "table": "observations",
+    "data": {
+      "kind": "learning",
+      "title": "Emoji 😀 y CJK 𠜎",
+      "body": "Matemáticas 𝔘 y bandera 🇪🇸."
+    },
+    "hash": "sha256:6d66cdd08d8b0f629c3a01c9d6979345792fba557ccc4df34375b037652ed404"
+  },
+  {
+    "name": "campos_ausentes",
+    "table": "checkpoints",
+    "data": {},
+    "hash": "sha256:6cfebf804e787d7f6f42ab4ec170a33635fc041b4fc37ad1e2f3c4a2b5bc8ece"
+  },
+  {
+    "name": "campos_nulos",
+    "table": "checkpoints",
+    "data": {
+      "goal": "",
+      "state": null,
+      "next_steps": "",
+      "files": null,
+      "open_questions": null
+    },
+    "hash": "sha256:6cfebf804e787d7f6f42ab4ec170a33635fc041b4fc37ad1e2f3c4a2b5bc8ece"
+  },
+  {
+    "name": "campos_largos",
+    "table": "observations",
+    "data": {
+      "kind": "discovery",
+      "title": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA áéíóú BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "body": " texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  texto   con    espacios  final ",
+      "topic_key": "campo/largo"
+    },
+    "hash": "sha256:77148d3277b7dc500c0b484618813e8687473c6fd53995f26c0198c7161700ac"
+  },
+  {
+    "name": "preferencia",
+    "table": "preferences",
+    "data": {
+      "pref_key": "commit/approval",
+      "value": "Presentar un informe y esperar confirmación explícita.",
+      "rationale": "El usuario lo pidió; no se atribuye al agente."
+    },
+    "hash": "sha256:562704e56e320208e633224e56cf3df612e81d3c39bd25514a41efab505a7efe"
+  },
+  {
+    "name": "preferencia_sin_motivo",
+    "table": "preferences",
+    "data": {
+      "pref_key": "docs/language",
+      "value": "Documentos en español (castellano)."
+    },
+    "hash": "sha256:52d03d54f5fc3651313817d026764db56b3869d794abe5db0d2c4a81ceba33a6"
+  }
+]

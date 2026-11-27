@@ -1,0 +1,4 @@
+github.com/fred66sp/agent-interaction-forms v0.0.0-20261126181707-9889d444d69f h1:VQ9yRHpNmcxlg3vZTJ1Aga0mTKwTPzmpWnzkHlHxR4o=
+github.com/fred66sp/agent-interaction-forms v0.0.0-20261126181707-9889d444d69f/go.mod h1:QDR0swQfvewryZJJcotgzQ3zl+vTrt3oiZ5UqRXDLkA=
+golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
+golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=
