@@ -112,15 +112,27 @@ misma clave sustituye a la activa en el mismo `batch`.
 
 ## Instalación
 
+Compila el ejecutable desde el commit o el tag que apruebes y enlázalo como
+`acm` global; la versión imprime el commit de origen:
+
 ```bash
 cd examples/agent-continuity/go
-go build -o ~/.local/bin/acm ./cmd/acm
+go build -ldflags "-X main.commit=<commit>" -o acm ./cmd/acm
+ln -sf "$(pwd)/acm" ~/.local/bin/acm
+acm --version   # acm 0.1.0 (<commit>)
 ```
 
-El binario queda estable y versionado con el repositorio. Requisitos: Go 1.27,
-`db-ai` en `PATH` con el contrato v0.2.0, `sqlite3` y `flock` para `init.sh`.
-Python 3 solo hace falta para `init.sh` y para la herramienta de referencia
-`tools/content-hash.py`; el binario no lo usa en ejecución.
+Reversión al adaptador Python (conservado como referencia, en la misma carpeta
+`tools/` del ejemplo):
+
+```bash
+ln -sf "$(pwd)/../tools/acm.py" ~/.local/bin/acm
+```
+
+Requisitos: `db-ai` en `PATH` con el contrato v0.2.0, `sqlite3` y `flock` para
+`init.sh`; Go 1.27 solo para compilar. Python 3 solo hace falta para `init.sh`
+y para la herramienta de referencia `tools/content-hash.py`; el binario no lo
+usa en ejecución.
 
 Para crear la base y registrar el montaje, desde esta carpeta:
 

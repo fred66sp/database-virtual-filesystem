@@ -62,3 +62,6 @@ dist/
 # Python: bytecode compilado (herramientas de examples/)
 __pycache__/
 *.pyc
+
+# binario compilado del ejemplo ACM (despliegue local, no distribuido por el repo)
+examples/agent-continuity/go/acm

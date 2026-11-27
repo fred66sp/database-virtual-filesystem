@@ -18,7 +18,12 @@ import (
 	"github.com/fred66sp/database-virtual-filesystem/acm/internal/memory"
 )
 
-const version = "0.1.0"
+// version carries the module version; the ldflags -X at deploy time add the
+// source commit so `acm --version` traces the exact build.
+var (
+	version = "0.1.0"
+	commit  = "dev"
+)
 
 const usageText = `acm — memoria de continuidad sobre db-ai
 
@@ -55,7 +60,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	switch args[0] {
 	case "--version", "-version", "version":
-		fmt.Fprintf(stdout, "acm %s\n", version)
+		fmt.Fprintf(stdout, "acm %s (%s)\n", version, commit)
 		return 0
 	case "--help", "-h", "-help", "help":
 		fmt.Fprint(stdout, usageText)

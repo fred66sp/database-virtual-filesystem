@@ -112,7 +112,7 @@ func (b *base) count(t *testing.T, query string) int {
 func TestVersion(t *testing.T) {
 	base := newBase(t)
 	stdout, _, code := base.run(t, "", "--version")
-	if code != 0 || stdout != "acm "+version+"\n" {
+	if code != 0 || stdout != "acm "+version+" ("+commit+")\n" {
 		t.Errorf("--version: code=%d stdout=%q", code, stdout)
 	}
 }
